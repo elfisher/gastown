@@ -36,6 +36,8 @@ const (
 	// AgentOmp is Oh My Pi (OMP) — Pi fork with hook-based lifecycle.
 	// Inspired by github.com/ProbabilityEngineer/pi-mono gastown integration.
 	AgentOmp AgentPreset = "omp"
+	// AgentKiro is Kiro CLI (Amazon's AI coding assistant).
+	AgentKiro AgentPreset = "kiro"
 )
 
 // AgentPresetInfo contains the configuration details for an agent preset.
@@ -378,6 +380,23 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 		NonInteractive: &NonInteractiveConfig{
 			PromptFlag: "--prompt",
 		},
+	},
+	AgentKiro: {
+		Name:                AgentKiro,
+		Command:             "kiro-cli",
+		Args:                []string{"chat", "--trust-all-tools", "--no-interactive"},
+		ProcessNames:        []string{"kiro-cli", "kiro-cli-chat"},
+		SessionIDEnv:        "",
+		ResumeFlag:          "--resume",
+		ResumeStyle:         "flag",
+		SupportsHooks:       false,
+		SupportsForkSession: false,
+		NonInteractive: &NonInteractiveConfig{
+			PromptFlag: "", // Kiro takes prompt as positional arg to chat subcommand
+		},
+		PromptMode:       "arg",
+		ReadyDelayMs:     5000,
+		InstructionsFile: "AGENTS.md",
 	},
 }
 

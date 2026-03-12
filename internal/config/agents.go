@@ -418,7 +418,7 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 	AgentKiro: {
 		Name:                AgentKiro,
 		Command:             "kiro-cli",
-		Args:                []string{"chat", "--trust-all-tools", "--no-interactive"},
+		Args:                []string{"chat", "--trust-all-tools"},
 		ProcessNames:        []string{"kiro-cli", "kiro-cli-chat"},
 		SessionIDEnv:        "",
 		ResumeFlag:          "",     // Kiro --resume takes no session ID, not compatible with GT resume

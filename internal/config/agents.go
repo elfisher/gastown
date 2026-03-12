@@ -392,9 +392,10 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 		ResumeStyle:         "flag",
 		SupportsHooks:       false,
 		SupportsForkSession: false,
-		NonInteractive:      nil, // Kiro uses --no-interactive flag in Args
+		NonInteractive:      nil,
 		PromptMode:          "arg",
-		ReadyDelayMs:        5000,
+		ReadyPromptPrefix:   "",
+		ReadyDelayMs:        20000,
 		InstructionsFile:    "AGENTS.md",
 	},
 }

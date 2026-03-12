@@ -1,17 +1,18 @@
 #!/bin/bash
 set -e
 
-# Build gt from source
+# Rebuild and install gt from local source
+# Run after making code changes
+
+cd "$(dirname "$0")/.."
+
 echo "🔨 Building gt..."
-cd "$(dirname "$0")"
 go build -o gt ./cmd/gt
 
-# Install stable copy to PATH
-echo "📦 Installing gt to /opt/homebrew/bin/gt..."
+echo "📦 Installing to /opt/homebrew/bin/gt..."
 cp gt /opt/homebrew/bin/gt
 
-echo "✅ Installed: $(gt version)"
+echo "✅ Installed: $(gt version 2>&1 | head -1)"
 echo ""
-echo "Usage:"
-echo "  gt          — runs stable installed build"
-echo "  ./gt        — runs local dev build (after go build -o gt ./cmd/gt)"
+echo "  gt     — runs stable installed build"
+echo "  ./gt   — runs local dev build (after go build -o gt ./cmd/gt)"

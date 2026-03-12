@@ -421,16 +421,15 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 		Args:                []string{"chat", "--trust-all-tools", "--no-interactive"},
 		ProcessNames:        []string{"kiro-cli", "kiro-cli-chat"},
 		SessionIDEnv:        "",
-		ResumeFlag:          "--resume",
+		ResumeFlag:          "",     // Kiro --resume takes no session ID, not compatible with GT resume
+		ContinueFlag:        "--resume", // --resume without args resumes most recent conversation
 		ResumeStyle:         "flag",
 		SupportsHooks:       false,
 		SupportsForkSession: false,
-		NonInteractive: &NonInteractiveConfig{
-			PromptFlag: "", // Kiro takes prompt as positional arg to chat subcommand
-		},
-		PromptMode:       "arg",
-		ReadyDelayMs:     5000,
-		InstructionsFile: "AGENTS.md",
+		NonInteractive:      nil, // Kiro uses --no-interactive flag in Args
+		PromptMode:          "arg",
+		ReadyDelayMs:        5000,
+		InstructionsFile:    "AGENTS.md",
 	},
 }
 

@@ -12,6 +12,9 @@ go build -o gt ./cmd/gt
 echo "📦 Installing to /opt/homebrew/bin/gt..."
 cp gt /opt/homebrew/bin/gt
 
+echo "🔏 Signing binary..."
+codesign --force --sign - /opt/homebrew/bin/gt
+
 echo "✅ Installed: $(gt version 2>&1 | head -1)"
 echo ""
 echo "  gt     — runs stable installed build"

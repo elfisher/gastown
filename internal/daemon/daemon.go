@@ -79,6 +79,11 @@ type Daemon struct {
 	// Only accessed from heartbeat loop goroutine - no sync needed.
 	bootLastSpawned time.Time
 
+	// postWakeStalled tracks polecats nudged after sleep/wake detection.
+	// Maps session name → time nudged. If still stalled on next heartbeat, session is killed.
+	// Only accessed from heartbeat loop goroutine - no sync needed.
+	postWakeStalled map[string]time.Time
+
 	// Restart tracking with exponential backoff to prevent crash loops
 	restartTracker *RestartTracker
 
@@ -247,18 +252,19 @@ func New(config *Config) (*Daemon, error) {
 	}
 
 	return &Daemon{
-		config:         config,
-		patrolConfig:   patrolConfig,
-		tmux:           tmux.NewTmux(),
-		logger:         logger,
-		ctx:            ctx,
-		cancel:         cancel,
-		doltServer:     doltServer,
-		gtPath:         gtPath,
-		bdPath:         bdPath,
-		restartTracker: restartTracker,
-		otelProvider:   otelProvider,
-		metrics:        dm,
+		config:          config,
+		patrolConfig:    patrolConfig,
+		tmux:            tmux.NewTmux(),
+		logger:          logger,
+		ctx:             ctx,
+		cancel:          cancel,
+		doltServer:      doltServer,
+		gtPath:          gtPath,
+		bdPath:          bdPath,
+		restartTracker:  restartTracker,
+		otelProvider:    otelProvider,
+		metrics:         dm,
+		postWakeStalled: make(map[string]time.Time),
 	}, nil
 }
 
@@ -606,7 +612,7 @@ func (d *Daemon) heartbeat(state *State) {
 	if !state.LastHeartbeat.IsZero() {
 		expectedInterval := d.recoveryHeartbeatInterval()
 		elapsed := time.Since(state.LastHeartbeat)
-		if elapsed > expectedInterval*2 {
+		if elapsed > expectedInterval*3 {
 			d.logger.Printf("Sleep/wake detected: %v since last heartbeat (expected %v), nudging stalled polecats", elapsed.Round(time.Second), expectedInterval)
 			d.nudgeStalledPolecats()
 		}
@@ -2090,12 +2096,42 @@ func (d *Daemon) reapIdlePolecats() {
 	}
 }
 
-// nudgeStalledPolecats sends a "check your hook" nudge to all polecats that have
-// hooked work but appear idle. Called after sleep/wake detection to recover agents
-// whose conversation loops stalled during system sleep.
-// Safe: if the agent is already working, the nudge is harmless.
+// nudgeStalledPolecats handles post-sleep recovery for polecats with hooked work.
+// Two-phase escalation:
+//   - Phase 1 (first detection): nudge the polecat to check its hook
+//   - Phase 2 (next heartbeat, no response): kill the zombied session
+//
+// After kill, the existing orphaned work detector (checkOrphanedWork) notices
+// the dead session with hooked work and the Witness re-dispatches it.
 func (d *Daemon) nudgeStalledPolecats() {
 	rigs := d.getKnownRigs()
+
+	// Phase 2: check polecats we nudged last time — kill if still stalled
+	for sessionName, nudgedAt := range d.postWakeStalled {
+		// Expire old entries (safety net)
+		if time.Since(nudgedAt) > 10*time.Minute {
+			delete(d.postWakeStalled, sessionName)
+			continue
+		}
+		alive, err := d.tmux.HasSession(sessionName)
+		if err != nil || !alive {
+			delete(d.postWakeStalled, sessionName)
+			continue
+		}
+		// Check if heartbeat updated since we nudged (agent recovered)
+		hb := polecat.ReadSessionHeartbeat(d.config.TownRoot, sessionName)
+		if hb != nil && hb.Timestamp.After(nudgedAt) {
+			d.logger.Printf("Polecat %s recovered after wake nudge", sessionName)
+			delete(d.postWakeStalled, sessionName)
+			continue
+		}
+		// No response after full heartbeat cycle — confirmed zombie
+		d.logger.Printf("Killing sleep-zombied polecat %s (no response to nudge after %v)", sessionName, time.Since(nudgedAt).Round(time.Second))
+		_ = d.tmux.KillSessionWithProcesses(sessionName)
+		delete(d.postWakeStalled, sessionName)
+	}
+
+	// Phase 1: nudge all polecats with hooked work
 	nudged := 0
 	for _, rigName := range rigs {
 		polecatsDir := filepath.Join(d.config.TownRoot, rigName, "polecats")
@@ -2109,7 +2145,9 @@ func (d *Daemon) nudgeStalledPolecats() {
 			if err != nil || !alive {
 				continue
 			}
-			// Check if polecat has hooked work via agent bead
+			if _, tracked := d.postWakeStalled[sessionName]; tracked {
+				continue
+			}
 			prefix := beads.GetPrefixForRig(d.config.TownRoot, rigName)
 			agentBeadID := beads.PolecatBeadIDWithPrefix(prefix, rigName, polecatName)
 			info, err := d.getAgentBeadInfo(agentBeadID)
@@ -2119,10 +2157,11 @@ func (d *Daemon) nudgeStalledPolecats() {
 			msg := fmt.Sprintf("System wake detected. You have work on your hook (%s). Run `gt hook` and continue immediately. If work is complete, run `gt done`.", info.HookBead)
 			if err := d.tmux.NudgeSession(sessionName, msg); err != nil {
 				d.logger.Printf("Warning: failed to nudge stalled polecat %s: %v", sessionName, err)
-			} else {
-				d.logger.Printf("Nudged stalled polecat %s (hook=%s)", sessionName, info.HookBead)
-				nudged++
+				continue
 			}
+			d.postWakeStalled[sessionName] = time.Now()
+			d.logger.Printf("Nudged stalled polecat %s (hook=%s), will verify next heartbeat", sessionName, info.HookBead)
+			nudged++
 		}
 	}
 	if nudged > 0 {

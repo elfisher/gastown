@@ -74,6 +74,12 @@
 
 ## Resolved
 
+### FIXED: macOS ASP kills gt binary after re-evaluation
+- **Symptom:** `gt` commands randomly fail with SIGKILL. Kernel logs show `Security policy would not allow process: /opt/homebrew/bin/gt`.
+- **Root cause:** `go build` produces an ad-hoc linker-signed binary. macOS ASP + corporate endpoint security (Ava/FortiDLP) periodically re-evaluate and block weakly signed binaries, especially under rapid invocation by agents.
+- **Fix:** `scripts/install-local.sh` now runs `codesign --force --sign -` after every build+copy. Must always use the install script, never raw `cp`.
+- **Permanent fix:** Use `make build` for proper signing, or add codesign to the Makefile.
+
 ### FIXED: Kiro preset used --no-interactive (commit `3872018b`)
 - Caused polecat sessions to exit immediately after completing prompt.
 - Removed flag; Kiro now stays alive in tmux for follow-up work.

@@ -597,6 +597,21 @@ func (d *Daemon) heartbeat(state *State) {
 	d.metrics.recordHeartbeat(d.ctx)
 	d.logger.Println("Heartbeat starting (recovery-focused)")
 
+	// 0. Detect sleep/wake: if time since last heartbeat is >2x the expected
+	// interval, the machine likely slept. Nudge all polecats with hooked work
+	// to re-check their hook and continue. This is safe — if the agent is
+	// already working, the nudge is harmless (agent sees "check your hook"
+	// while already processing it). If the agent stalled during sleep, this
+	// wakes it up.
+	if !state.LastHeartbeat.IsZero() {
+		expectedInterval := d.recoveryHeartbeatInterval()
+		elapsed := time.Since(state.LastHeartbeat)
+		if elapsed > expectedInterval*2 {
+			d.logger.Printf("Sleep/wake detected: %v since last heartbeat (expected %v), nudging stalled polecats", elapsed.Round(time.Second), expectedInterval)
+			d.nudgeStalledPolecats()
+		}
+	}
+
 	// 0a. Reload prefix registry so new/changed rigs get correct session names.
 	// Without this, rigs added after daemon startup get the "gt" default prefix,
 	// causing ghost sessions like gt-witness instead of ti-witness. (hq-ouz, hq-eqf, hq-3i4)
@@ -2072,6 +2087,46 @@ func (d *Daemon) reapIdlePolecats() {
 	rigs := d.getKnownRigs()
 	for _, rigName := range rigs {
 		d.reapRigIdlePolecats(rigName, timeout)
+	}
+}
+
+// nudgeStalledPolecats sends a "check your hook" nudge to all polecats that have
+// hooked work but appear idle. Called after sleep/wake detection to recover agents
+// whose conversation loops stalled during system sleep.
+// Safe: if the agent is already working, the nudge is harmless.
+func (d *Daemon) nudgeStalledPolecats() {
+	rigs := d.getKnownRigs()
+	nudged := 0
+	for _, rigName := range rigs {
+		polecatsDir := filepath.Join(d.config.TownRoot, rigName, "polecats")
+		polecats, err := listPolecatWorktrees(polecatsDir)
+		if err != nil {
+			continue
+		}
+		for _, polecatName := range polecats {
+			sessionName := session.PolecatSessionName(session.PrefixFor(rigName), polecatName)
+			alive, err := d.tmux.HasSession(sessionName)
+			if err != nil || !alive {
+				continue
+			}
+			// Check if polecat has hooked work via agent bead
+			prefix := beads.GetPrefixForRig(d.config.TownRoot, rigName)
+			agentBeadID := beads.PolecatBeadIDWithPrefix(prefix, rigName, polecatName)
+			info, err := d.getAgentBeadInfo(agentBeadID)
+			if err != nil || info.HookBead == "" {
+				continue
+			}
+			msg := fmt.Sprintf("System wake detected. You have work on your hook (%s). Run `gt hook` and continue immediately. If work is complete, run `gt done`.", info.HookBead)
+			if err := d.tmux.NudgeSession(sessionName, msg); err != nil {
+				d.logger.Printf("Warning: failed to nudge stalled polecat %s: %v", sessionName, err)
+			} else {
+				d.logger.Printf("Nudged stalled polecat %s (hook=%s)", sessionName, info.HookBead)
+				nudged++
+			}
+		}
+	}
+	if nudged > 0 {
+		d.logger.Printf("Nudged %d stalled polecat(s) after sleep/wake", nudged)
 	}
 }
 

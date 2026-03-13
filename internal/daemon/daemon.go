@@ -699,6 +699,11 @@ func (d *Daemon) heartbeat(state *State) {
 	// Kill sessions that have been idle longer than the configured threshold.
 	d.reapIdlePolecats()
 
+	// 12c. Auto-compact system agent sessions to prevent context overflow.
+	// Checks context usage percentage from agent prompt and sends /compact
+	// when threshold is exceeded. Only applies to agents with CompactCommand set.
+	d.compactSystemAgents()
+
 	// 13. Clean up orphaned claude subagent processes (memory leak prevention)
 	// These are Task tool subagents that didn't clean up after completion.
 	// This is a safety net - Deacon patrol also does this more frequently.
@@ -2067,6 +2072,37 @@ func (d *Daemon) reapIdlePolecats() {
 	rigs := d.getKnownRigs()
 	for _, rigName := range rigs {
 		d.reapRigIdlePolecats(rigName, timeout)
+	}
+}
+
+// compactSystemAgents checks context usage for long-running system agent sessions
+// (Mayor, Deacon, Witnesses, Refineries) and sends the agent's compact command
+// when usage exceeds the configured threshold. Prevents context overflow crashes.
+func (d *Daemon) compactSystemAgents() {
+	// Collect all system agent sessions
+	sessions, err := d.tmux.ListSessions()
+	if err != nil {
+		return
+	}
+
+	for _, sess := range sessions {
+		// Determine which agent is running in this session
+		agentName, _ := d.tmux.GetEnvironment(sess, "GT_AGENT")
+		if agentName == "" {
+			continue
+		}
+
+		preset := config.GetAgentPresetByName(agentName)
+		if preset == nil || preset.CompactCommand == "" || preset.CompactThreshold <= 0 {
+			continue
+		}
+
+		compacted, err := d.tmux.CompactIfNeeded(sess, preset)
+		if err != nil {
+			d.logger.Printf("Warning: compact check failed for %s: %v", sess, err)
+		} else if compacted {
+			d.logger.Printf("Compacted session %s (agent=%s, threshold=%d%%)", sess, agentName, preset.CompactThreshold)
+		}
 	}
 }
 

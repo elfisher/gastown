@@ -1464,6 +1464,61 @@ func (t *Tmux) NudgeSession(session, message string) error {
 	return fmt.Errorf("failed to send Enter after 3 attempts: %w", lastErr)
 }
 
+// CompactIfNeeded checks the agent's context usage and sends a compact command
+// if it exceeds the threshold. Returns true if compact was sent.
+// contextPercent is parsed from the agent's prompt line (e.g., "50% !>" → 50).
+// preset provides the CompactCommand and CompactThreshold.
+func (t *Tmux) CompactIfNeeded(session string, preset *config.AgentPresetInfo) (bool, error) {
+	if preset == nil || preset.CompactCommand == "" || preset.CompactThreshold <= 0 {
+		return false, nil
+	}
+
+	// Capture last few lines to find the context percentage
+	lines, err := t.CapturePaneLines(session, 5)
+	if err != nil {
+		return false, err
+	}
+
+	pct := parseContextPercent(lines)
+	if pct < preset.CompactThreshold {
+		return false, nil
+	}
+
+	// Send the compact command
+	if err := t.NudgeSession(session, preset.CompactCommand); err != nil {
+		return false, fmt.Errorf("sending compact: %w", err)
+	}
+
+	return true, nil
+}
+
+// parseContextPercent extracts the context usage percentage from Kiro's prompt.
+// Looks for patterns like "50% !>" or "8% >" in the captured pane lines.
+func parseContextPercent(lines []string) int {
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		// Match "NN% " at start of line (Kiro prompt format: "50% !>")
+		for j := 0; j < len(line); j++ {
+			if line[j] == '%' && j > 0 {
+				numStr := strings.TrimSpace(line[:j])
+				pct := 0
+				for _, c := range numStr {
+					if c >= '0' && c <= '9' {
+						pct = pct*10 + int(c-'0')
+					} else {
+						pct = 0
+						break
+					}
+				}
+				if pct > 0 && pct <= 100 {
+					return pct
+				}
+			}
+		}
+	}
+	return 0
+}
+
 // NudgePane sends a message to a specific pane reliably.
 // Same pattern as NudgeSession but targets a pane ID (e.g., "%9") instead of session name.
 // After sending, triggers SIGWINCH to wake Claude in detached sessions.

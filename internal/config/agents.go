@@ -145,6 +145,16 @@ type AgentPresetInfo struct {
 	// false, a background nudge-poller process is started to periodically drain
 	// the queue and inject via tmux.
 	HasTurnBoundaryDrain bool `json:"has_turn_boundary_drain,omitempty"`
+
+	// CompactCommand is the slash command to compact the agent's context.
+	// Sent via tmux send-keys when context usage exceeds CompactThreshold.
+	// For Kiro: "/compact". Empty means the agent doesn't support compaction.
+	CompactCommand string `json:"compact_command,omitempty"`
+
+	// CompactThreshold is the context usage percentage (0-100) above which
+	// Gas Town should trigger compaction. 0 means no auto-compact.
+	CompactThreshold int `json:"compact_threshold,omitempty"`
+
 	// ACP is the configuration for ACP (Agent Communication Protocol) support.
 	// nil means the agent does not support ACP.
 	ACP *ACPConfig `json:"acp,omitempty"`
@@ -431,6 +441,8 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 		ReadyPromptPrefix:   "",
 		ReadyDelayMs:        20000,
 		InstructionsFile:    "AGENTS.md",
+		CompactCommand:      "/compact Retain: your role, current task, and active work context. Discard: previous task tool outputs and file contents.",
+		CompactThreshold:    50,
 	},
 }
 

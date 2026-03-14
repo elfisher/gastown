@@ -1,0 +1,4 @@
+[23:48:05] ✓ gastown/polecats/nux      done: gt-lop
+[23:48:31] → gt                        spawn
+[23:48:38] 🎯 mayor                     slung gt-52r to gastown/polecats/furiosa
+[23:49:11] → dd-quartz                 session_death

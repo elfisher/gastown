@@ -1,0 +1,20 @@
+[
+  {
+    "name": "gastown",
+    "beads_prefix": "gt",
+    "status": "operational",
+    "witness": "running",
+    "refinery": "running",
+    "polecats": 2,
+    "crew": 0
+  },
+  {
+    "name": "devsecops_demo",
+    "beads_prefix": "dd",
+    "status": "operational",
+    "witness": "running",
+    "refinery": "running",
+    "polecats": 1,
+    "crew": 0
+  }
+]

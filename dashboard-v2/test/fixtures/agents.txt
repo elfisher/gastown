@@ -1,0 +1,11 @@
+  🎩 Mayor
+  🐺 Deacon
+── gastown ──
+  🏭 refinery
+  🦉 witness
+  🦨 furiosa (gt-52r)
+  🦨 nux
+
+── devsecops_demo ──
+  🏭 refinery
+  🦉 witness

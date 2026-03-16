@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
+import formbody from "@fastify/formbody";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
@@ -10,6 +11,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export async function buildApp() {
   const app = Fastify({ logger: false });
 
+  await app.register(formbody);
   await app.register(fastifyStatic, {
     root: join(__dirname, "..", "static"),
     prefix: "/static/",

@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { listRigs } from "./data/rigs.js";
+import { getMayorMessages } from "./data/mayor.js";
 import { renderLayout } from "./pages/layout.js";
+import { renderMayorPage } from "./pages/mayor.js";
+import { registerMayorApi } from "./api/mayor.js";
 import type { Rig } from "./data/schemas.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
-  // Cache rigs for nav (refreshed per request — cheap CLI call)
   async function withLayout(
     title: string,
     content: string,
@@ -43,7 +45,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/mayor", async (_req, reply) => {
-    const html = await withLayout("Mayor", placeholder("Mayor"), "/mayor");
+    const messages = await getMayorMessages();
+    const html = await withLayout(
+      "Mayor",
+      renderMayorPage(messages),
+      "/mayor"
+    );
     return reply.type("text/html").send(html);
   });
 
@@ -100,4 +107,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.type("text/html").send(html);
     }
   );
+
+  // Mayor API endpoints
+  await registerMayorApi(app);
 }

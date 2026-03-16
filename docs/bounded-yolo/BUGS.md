@@ -53,6 +53,12 @@
 - **Symptom:** When the `agent` type isn't registered, sling retries 10 times with exponential backoff (~3 minutes) before failing on a permanently broken config.
 - **Fix:** Before attempting to spawn a polecat, verify the target rig's beads DB can create agent-type issues. Fail immediately with actionable guidance ("run `gt doctor --fix`" or "run `bd config set types.custom ...`") instead of retrying.
 
+### BUG: Polecat context blowup kills session with no recovery
+- **Symptom:** Polecat ingests a large spec + multiple tool outputs, context grows until API rejects with `ValidationException: Improperly formed request`. Session drops to dead prompt, polecat stalls silently.
+- **Root cause:** Context grows monotonically within a single task. Unlike system agents (protected by auto-compact), polecats have no safety net. When the API limit is hit, the session is unrecoverable.
+- **Impact:** Work stalls silently until a human notices.
+- **Fix:** Detect dead polecat sessions (no activity, API error in pane output, dead prompt), mark the bead as failed, and re-sling to a fresh polecat. The Witness or daemon should handle this as part of its patrol — same pattern as stuck agent detection but checking for API errors specifically.
+
 ### BUG: Model unavailability drops polecat into interactive prompt
 - **Symptom:** When the selected model becomes temporarily unavailable mid-session, the agent drops into an interactive model selection prompt. Autonomous polecats can't answer interactive prompts, so they get stuck indefinitely.
 - **Impact:** Polecat hangs forever. Work stalls. No automatic recovery.

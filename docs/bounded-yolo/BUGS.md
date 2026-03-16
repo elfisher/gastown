@@ -1,5 +1,60 @@
 # Bugs & TODOs — Kiro Integration
 
+## Architecture Note: Why Existing Daemon Checks Don't Catch Our Bugs
+
+The daemon heartbeat already has sophisticated health checking. Here's what it does and where the gaps are:
+
+### What the daemon already checks (every 3 minutes)
+
+| Step | What it does | What it catches |
+|------|-------------|-----------------|
+| 0 | Sleep/wake detection | Nudges stalled polecats after laptop sleep (two-phase: nudge → kill) |
+| 1-6 | `ensureXRunning()` for all system agents | Dead tmux session → respawn (Deacon, Witnesses, Refineries, Mayor) |
+| 10 | GUPP violation check | Polecats with work-on-hook not progressing |
+| 11 | Orphaned work check | Work assigned to dead agents |
+| 12 | `checkPolecatSessionHealth()` | Polecat has hooked bead but tmux session is dead → notify Witness |
+| 12b | Reap idle polecats | Kill sessions idle too long (API slot burn) |
+| 12c | `compactSystemAgents()` | Auto-compact system agents when context > threshold |
+
+### The critical gap: "session alive but agent dead"
+
+Step 12 (`checkPolecatSessionHealth`) only checks **whether the tmux session exists**. If the session exists, it returns immediately — "Session is alive, nothing to do." It never looks inside the session.
+
+This means the daemon is blind to:
+
+- **Context blowup** — tmux session is alive, but the agent hit `ValidationException` and is sitting at a dead prompt. Session exists → daemon says "all good."
+- **Model unavailability** — tmux session is alive, but the agent is stuck at an interactive model selection prompt. Session exists → daemon says "all good."
+- **Idle reuse failure** — polecat has a hooked bead and a tmux session, but the session never received work instructions. Session exists → daemon says "all good."
+
+The daemon checks for **session death** but not **session sickness**. A sick session (alive but non-functional) is invisible to every current check.
+
+### The fix: add pane content inspection to step 12
+
+The building blocks already exist:
+- `tmux capture-pane` is already used by `compactSystemAgents()` to read context percentage from the prompt
+- The two-phase nudge/kill pattern from sleep/wake recovery (`postWakeStalled`) is proven
+- `notifyWitnessOfCrashedPolecat()` already handles the recovery dispatch
+
+What's missing is a `checkPolecatSessionSickness()` step that, for sessions that ARE alive, captures the pane and looks for:
+1. API error strings (`ValidationException`, `Improperly formed request`)
+2. Interactive prompts the agent can't answer (model selection, confirmation dialogs)
+3. Idle prompt with no activity for N minutes while work is hooked
+
+Any of these → same two-phase treatment: nudge first, kill and re-sling on next heartbeat if still sick.
+
+### The split-brain gap: no pre-flight validation
+
+Separately, the daemon has no pre-flight checks before work is dispatched. `gt sling` doesn't validate that the target rig's beads DB has the right custom types, redirects, or routing. The daemon's `checkPolecatSessionHealth` catches the crash AFTER it happens, but the crash-loop continues because the root cause (broken config) persists across re-slings.
+
+The fix: add a `validateRigReady()` check that `gt sling` calls before spawning, and that `gt doctor` runs per-rig instead of town-level only. This turns a 10-retry crash loop into a fast failure with actionable guidance.
+
+### Summary: two additions to the heartbeat
+
+1. **Pane inspection for sick sessions** — extend step 12 to look inside alive-but-broken sessions. Uses existing `capture-pane` and two-phase nudge/kill patterns.
+2. **Pre-sling rig validation** — not in the heartbeat itself, but called by `gt sling` and `gt doctor` to prevent dispatching work to broken rigs.
+
+These two changes cover all 12 open bugs through the same mechanisms GT already uses.
+
 ## P1 — Reliability
 
 ### TODO: Mayor shouldn't poll in a while loop

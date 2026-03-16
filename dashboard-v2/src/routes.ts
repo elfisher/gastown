@@ -4,6 +4,8 @@ import { getMayorMessages } from "./data/mayor.js";
 import { renderLayout } from "./pages/layout.js";
 import { renderMayorPage } from "./pages/mayor.js";
 import { registerMayorApi } from "./api/mayor.js";
+import { renderRigPage } from "./pages/rig.js";
+import { renderConvoyPage } from "./pages/convoy.js";
 import type { Rig } from "./data/schemas.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -22,7 +24,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   }
 
   function placeholder(name: string): string {
-    return `<div class="prose"><h1>${name}</h1><p class="text-base-content/60">Coming soon — Phase 2+</p></div>`;
+    return `<div class="prose"><h1>${name}</h1><p class="text-base-content/60">Coming soon</p></div>`;
   }
 
   app.get("/", async (_req, reply) => {
@@ -31,11 +33,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/pipeline", async (_req, reply) => {
-    const html = await withLayout(
-      "Pipeline",
-      placeholder("Pipeline"),
-      "/pipeline"
-    );
+    const html = await withLayout("Pipeline", placeholder("Pipeline"), "/pipeline");
     return reply.type("text/html").send(html);
   });
 
@@ -63,11 +61,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     "/rig/:name",
     async (req, reply) => {
       const name = req.params.name;
-      const html = await withLayout(
-        `Rig: ${name}`,
-        placeholder(`Rig: ${name}`),
-        `/rig/${name}`
-      );
+      const content = await renderRigPage(name);
+      const html = await withLayout(`Rig: ${name}`, content, `/rig/${name}`);
       return reply.type("text/html").send(html);
     }
   );
@@ -76,10 +71,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     "/convoy/:id",
     async (req, reply) => {
       const id = req.params.id;
-      const html = await withLayout(
-        `Convoy: ${id}`,
-        placeholder(`Convoy: ${id}`)
-      );
+      const content = await renderConvoyPage(id);
+      const html = await withLayout(`Convoy: ${id}`, content);
       return reply.type("text/html").send(html);
     }
   );
@@ -88,10 +81,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     "/bead/:id",
     async (req, reply) => {
       const id = req.params.id;
-      const html = await withLayout(
-        `Bead: ${id}`,
-        placeholder(`Bead: ${id}`)
-      );
+      const html = await withLayout(`Bead: ${id}`, placeholder(`Bead: ${id}`));
       return reply.type("text/html").send(html);
     }
   );
@@ -100,10 +90,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     "/agent/:name",
     async (req, reply) => {
       const name = req.params.name;
-      const html = await withLayout(
-        `Agent: ${name}`,
-        placeholder(`Agent: ${name}`)
-      );
+      const html = await withLayout(`Agent: ${name}`, placeholder(`Agent: ${name}`));
       return reply.type("text/html").send(html);
     }
   );

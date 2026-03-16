@@ -19,14 +19,14 @@ export class ExecError extends Error {
 export async function exec(
   command: string,
   args: string[],
-  options?: { cwd?: string; timeoutMs?: number }
+  options?: { cwd?: string; timeoutMs?: number; timeout?: number }
 ): Promise<ExecResult> {
-  const timeout = options?.timeoutMs ?? 10_000;
+  const timeout = options?.timeout ?? options?.timeoutMs ?? 10_000;
   return new Promise((resolve, reject) => {
     execFile(
       command,
       args,
-      { cwd: options?.cwd, timeout, maxBuffer: 1024 * 1024 },
+      { cwd: options?.cwd, timeout, maxBuffer: 10 * 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
           reject(

@@ -8,3 +8,8 @@ export async function listRigs(): Promise<Rig[]> {
   });
   return RigListSchema.parse(JSON.parse(result.stdout));
 }
+
+export async function getRig(name: string): Promise<Rig | undefined> {
+  const rigs = await listRigs();
+  return rigs.find((r) => r.name === name);
+}

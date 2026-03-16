@@ -22,13 +22,22 @@ export async function buildApp() {
   return app;
 }
 
-async function main() {
-  const app = await buildApp();
-  await app.listen({ port: config.port, host: config.host });
-  console.log(`Gas Town Dashboard v2 listening on http://localhost:${config.port}`);
-}
+// Only start server when run directly (not imported by tests)
+const isMainModule =
+  process.argv[1] &&
+  (process.argv[1].endsWith("/server.ts") ||
+    process.argv[1].endsWith("/server.js"));
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isMainModule) {
+  buildApp()
+    .then(async (app) => {
+      await app.listen({ port: config.port, host: config.host });
+      console.log(
+        `Gas Town Dashboard v2 listening on http://localhost:${config.port}`
+      );
+    })
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}

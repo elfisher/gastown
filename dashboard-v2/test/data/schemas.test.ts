@@ -1,56 +1,87 @@
 import { describe, it, expect } from "vitest";
-import { RigSchema, RigListSchema } from "../../src/data/schemas.js";
+import {
+  BeadSchema,
+  BeadListSchema,
+  BeadDetailSchema,
+  ConvoySchema,
+  ConvoyListSchema,
+  AgentSchema,
+  AgentListSchema,
+  EventSchema,
+} from "../../src/data/schemas.js";
 
-describe("RigSchema", () => {
-  it("validates a valid rig", () => {
-    const rig = {
-      name: "gastown",
-      beads_prefix: "gt",
-      status: "operational",
-      witness: "running",
-      refinery: "running",
-      polecats: 2,
-      crew: 1,
-    };
-    expect(RigSchema.parse(rig)).toEqual(rig);
+describe("BeadSchema", () => {
+  const validBead = {
+    id: "gt-abc12",
+    title: "Fix auth bug",
+    status: "open",
+    priority: 1,
+    issue_type: "bug",
+    created_at: "2026-03-13",
+    updated_at: "2026-03-14",
+  };
+
+  it("validates a valid bead", () => {
+    expect(BeadSchema.parse(validBead)).toEqual(validBead);
+  });
+
+  it("validates bead with optional fields", () => {
+    const full = { ...validBead, assignee: "slit", description: "details", labels: ["urgent"] };
+    expect(BeadSchema.parse(full).assignee).toBe("slit");
   });
 
   it("rejects missing required field", () => {
-    expect(() => RigSchema.parse({ name: "test" })).toThrow();
-  });
-
-  it("rejects wrong type", () => {
-    expect(() =>
-      RigSchema.parse({
-        name: "test",
-        beads_prefix: "t",
-        status: "ok",
-        witness: "running",
-        refinery: "running",
-        polecats: "two",
-        crew: 0,
-      })
-    ).toThrow();
+    expect(() => BeadSchema.parse({ id: "gt-x" })).toThrow();
   });
 });
 
-describe("RigListSchema", () => {
-  it("validates an array of rigs", () => {
-    const rigs = [
-      {
-        name: "gastown",
-        beads_prefix: "gt",
-        status: "operational",
-        witness: "running",
-        refinery: "running",
-        polecats: 1,
-        crew: 0,
-      },
-    ];
-    expect(RigListSchema.parse(rigs)).toEqual(rigs);
+describe("BeadDetailSchema", () => {
+  it("validates bead with dependencies", () => {
+    const detail = {
+      id: "gt-abc12",
+      title: "Fix auth",
+      status: "open",
+      priority: 1,
+      issue_type: "bug",
+      created_at: "2026-03-13",
+      updated_at: "2026-03-14",
+      dependencies: [{ id: "gt-dep1", title: "Setup", status: "closed", priority: 2 }],
+      dependents: [],
+    };
+    const parsed = BeadDetailSchema.parse(detail);
+    expect(parsed.dependencies).toHaveLength(1);
+  });
+});
+
+describe("ConvoySchema", () => {
+  const validConvoy = {
+    id: "hq-cv-abc",
+    name: "Auth System",
+    status: "active",
+    created_at: "2026-03-13",
+    issues: ["gt-abc12", "gt-def34"],
+    issue_count: 2,
+  };
+
+  it("validates a valid convoy", () => {
+    expect(ConvoySchema.parse(validConvoy)).toEqual(validConvoy);
   });
 
-  it("validates empty array", () => {
-    expect(RigListSchema.parse([])).toEqual([]);
+  it("rejects missing name", () => {
+    expect(() => ConvoySchema.parse({ id: "x", status: "active", created_at: "2026" })).toThrow();
+  });
+});
+
+describe("AgentSchema", () => {
+  it("validates agent", () => {
+    const agent = { name: "slit", role: "polecat", rig: "gastown" };
+    expect(AgentSchema.parse(agent)).toEqual(agent);
+  });
+});
+
+describe("EventSchema", () => {
+  it("validates event", () => {
+    const event = { timestamp: "15:30:00", source: "slit", action: "completed gt-abc12" };
+    expect(EventSchema.parse(event)).toEqual(event);
   });
 });

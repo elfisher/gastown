@@ -16,3 +16,7 @@ function detectTownRoot(): string {
     "Cannot detect Gas Town root. Set GT_ROOT or ensure ~/gt exists."
   );
 }
+
+export function getGtRoot(): string {
+  return config.townRoot;
+}

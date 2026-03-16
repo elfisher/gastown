@@ -1,4 +1,5 @@
 import type { Rig } from "../data/schemas.js";
+import { escapeHtml } from "./helpers.js";
 
 export function renderLayout(
   title: string,
@@ -34,6 +35,7 @@ export function renderLayout(
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@2.0.0"></script>
+  <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <div class="drawer lg:drawer-open">
@@ -68,14 +70,7 @@ export function renderLayout(
       </div>
     </div>
   </div>
+  <script src="/static/app.js"></script>
 </body>
 </html>`;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

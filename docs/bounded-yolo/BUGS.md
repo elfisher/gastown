@@ -1,5 +1,85 @@
 # Bugs & TODOs — Kiro Integration
 
+## Test Plan: Negative Tests for Daemon Health Gaps
+
+Write all tests first (red), then implement fixes (green). Tests use the existing mock pattern from `polecat_health_test.go`: fake tmux/bd shell scripts, construct a `Daemon` struct, assert on log output.
+
+### Mock infrastructure needed
+
+- `writeFakeTestTmuxAlive(t, dir, paneContent)` — returns success for `has-session`, returns `paneContent` for `capture-pane`
+- Reuse existing `writeFakeTestBD` for bead state
+
+### Tier 1: Specific pane pattern detection
+
+These test that the daemon detects known failure patterns in alive sessions.
+
+**Test 1: `TestCheckPolecatHealth_MissesValidationException`** (negative)
+- Setup: tmux session alive, pane contains `ValidationException: Improperly formed request`, polecat has hooked bead, agent_state=working
+- Current behavior: no detection (session alive → "nothing to do")
+- Assert: no `SICK_SESSION` logged, no `CRASH DETECTED` logged
+- After fix: assert `SICK_SESSION` logged, kill + re-sling triggered
+
+**Test 2: `TestCheckPolecatHealth_MissesModelSelectionPrompt`** (negative)
+- Setup: tmux session alive, pane contains `Select model (type to search):`, polecat has hooked bead
+- Current behavior: no detection
+- Assert: no `SICK_SESSION` logged, no tmux send-keys invoked
+- After fix: assert `MODEL_PROMPT_DETECTED` logged, Enter sent via tmux send-keys
+
+**Test 3: `TestCheckPolecatHealth_IgnoresSickPaneWhenWorking`** (positive guard)
+- Setup: tmux session alive, pane contains `⠋ Thinking...`, polecat has hooked bead
+- Assert: no detection, no action (even if pane also contains stale error text from scrollback)
+- This test should pass both before and after the fix — it guards against false positives
+
+### Tier 2: Generic staleness detection
+
+These test that the daemon detects sessions with no pane changes across heartbeats.
+
+**Test 4: `TestCheckPolecatHealth_MissesStaleSession`** (negative)
+- Setup: tmux session alive, pane content identical across two calls to `checkPolecatHealth`, polecat has hooked bead, agent_state=working
+- Current behavior: no detection
+- Assert: no `STALE_SESSION` logged
+- After fix: assert `STALE_SESSION` logged on second check, nudge sent. Assert kill on third check if still stale.
+
+**Test 5: `TestCheckPolecatHealth_StaleSessionWithNoHook`** (positive guard)
+- Setup: tmux session alive, pane unchanged, but polecat has NO hooked bead (idle)
+- Assert: no detection, no action — idle agents are allowed to be stale
+- Should pass before and after fix
+
+### Pre-sling rig validation
+
+**Test 6: `TestSlingPreflight_MissingCustomTypes`** (negative)
+- Setup: rig beads DB exists but has no `agent` custom type registered
+- Current behavior: sling proceeds, retries 10 times, fails
+- Assert: no pre-flight error (function doesn't exist yet)
+- After fix: assert `validateRigReady()` returns error with actionable message
+
+**Test 7: `TestSlingPreflight_ValidRig`** (positive guard)
+- Setup: rig beads DB has all custom types registered
+- Assert: `validateRigReady()` returns nil
+- Should pass after fix is implemented
+
+**Test 8: `TestDoctorCheck_PerRigTypes`** (negative)
+- Setup: town-level DB has custom types, one rig DB is missing them
+- Current behavior: doctor reports all clear (only checks town-level)
+- Assert: doctor check passes (proving the gap)
+- After fix: assert doctor check fails for the broken rig
+
+### Boot race condition
+
+**Test 9: `TestHeartbeat_DetectsRetirementLimbo`** (negative)
+- Setup: polecat agent_state=waiting-for-retirement, merge request in queue, refinery session alive, witness session alive but sleeping (pane unchanged)
+- Current behavior: no detection
+- Assert: no nudge sent to witness
+- After fix: assert witness nudged via tmux send-keys
+
+### Reboot recovery
+
+**Test 10: `TestHeartbeat_DetectsOrphanedHookedPolecats`** (negative)
+- Setup: polecat has hooked bead in DB, no tmux session exists, agent_state=working (not spawning)
+- Current behavior: `checkPolecatSessionHealth` detects this and notifies witness — but does NOT auto-respawn
+- Assert: `CRASH DETECTED` logged but no new tmux session created
+- After fix: assert auto-respawn triggered (or re-sling dispatched)
+
 ## Architecture Note: Why Existing Daemon Checks Don't Catch Our Bugs
 
 The daemon heartbeat already has sophisticated health checking. Here's what it does and where the gaps are:

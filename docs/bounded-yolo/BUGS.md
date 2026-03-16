@@ -43,6 +43,14 @@
 - **Symptom:** When the `agent` type isn't registered, sling retries 10 times with exponential backoff (~3 minutes) before failing on a permanently broken config.
 - **Fix:** Before attempting to spawn a polecat, verify the target rig's beads DB can create agent-type issues. Fail immediately with actionable guidance ("run `gt doctor --fix`" or "run `bd config set types.custom ...`") instead of retrying.
 
+### BUG: Model unavailability drops polecat into interactive prompt
+- **Symptom:** When the selected model becomes temporarily unavailable mid-session, the agent drops into an interactive model selection prompt. Autonomous polecats can't answer interactive prompts, so they get stuck indefinitely.
+- **Impact:** Polecat hangs forever. Work stalls. No automatic recovery.
+- **Fix options:**
+  - Pre-configure a fallback model so the agent auto-switches without prompting
+  - Detect the stuck model-selection prompt via tmux capture-pane and auto-select (similar to how sleep/wake nudging works)
+  - Pass a flag or env var that tells the agent runtime to never prompt interactively for model selection
+
 ## P2 — Improvements
 
 ### TODO: Session rotation for long-running agents

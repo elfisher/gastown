@@ -53,24 +53,20 @@ func TestCheckPolecatHealth_MissesValidationException(t *testing.T) {
 
 	var logBuf strings.Builder
 	d := &Daemon{
-		config: &Config{TownRoot: t.TempDir()},
-		logger: log.New(&logBuf, "", 0),
-		tmux:   tmux.NewTmux(),
-		bdPath: bdPath,
+		config:        &Config{TownRoot: t.TempDir()},
+		logger:        log.New(&logBuf, "", 0),
+		tmux:          tmux.NewTmux(),
+		bdPath:        bdPath,
+		paneSnapshots: make(map[string]string),
 	}
 
 	d.checkPolecatHealth("myr", "mycat")
 
 	got := logBuf.String()
-	// NEGATIVE: current code sees session alive and does nothing.
-	// It does NOT detect the ValidationException in the pane.
-	if strings.Contains(got, "SICK_SESSION") || strings.Contains(got, "CRASH DETECTED") {
-		t.Errorf("current code should NOT detect sick session, but got: %q", got)
+	// FIX IMPLEMENTED: daemon now detects ValidationException in alive sessions.
+	if !strings.Contains(got, "SICK_SESSION") {
+		t.Errorf("expected SICK_SESSION for ValidationException in pane, got: %q", got)
 	}
-	// After fix, flip this assertion:
-	// if !strings.Contains(got, "SICK_SESSION") {
-	//     t.Errorf("expected SICK_SESSION for ValidationException in pane, got: %q", got)
-	// }
 }
 
 // TestCheckPolecatHealth_MissesModelSelectionPrompt is a NEGATIVE test proving
@@ -94,36 +90,29 @@ func TestCheckPolecatHealth_MissesModelSelectionPrompt(t *testing.T) {
 
 	var logBuf strings.Builder
 	d := &Daemon{
-		config: &Config{TownRoot: t.TempDir()},
-		logger: log.New(&logBuf, "", 0),
-		tmux:   tmux.NewTmux(),
-		bdPath: bdPath,
+		config:        &Config{TownRoot: t.TempDir()},
+		logger:        log.New(&logBuf, "", 0),
+		tmux:          tmux.NewTmux(),
+		bdPath:        bdPath,
+		paneSnapshots: make(map[string]string),
 	}
 
 	d.checkPolecatHealth("myr", "mycat")
 
 	got := logBuf.String()
-	// NEGATIVE: current code sees session alive and does nothing.
-	if strings.Contains(got, "MODEL_PROMPT_DETECTED") {
-		t.Errorf("current code should NOT detect model selection prompt, but got: %q", got)
+	// FIX IMPLEMENTED: daemon now detects model selection prompt and sends Enter.
+	if !strings.Contains(got, "MODEL_PROMPT_DETECTED") {
+		t.Errorf("expected MODEL_PROMPT_DETECTED, got: %q", got)
 	}
-	// Verify no send-keys was invoked
+	// Verify Enter was sent via tmux send-keys
 	sendLog := filepath.Join(binDir, "tmux-sends.log")
-	if _, err := os.Stat(sendLog); err == nil {
-		data, _ := os.ReadFile(sendLog)
-		t.Errorf("current code should NOT send keys, but tmux-sends.log exists: %q", string(data))
+	data, err := os.ReadFile(sendLog)
+	if err != nil {
+		t.Fatalf("expected tmux send-keys to be called, but log missing: %v", err)
 	}
-	// After fix, flip these assertions:
-	// if !strings.Contains(got, "MODEL_PROMPT_DETECTED") {
-	//     t.Errorf("expected MODEL_PROMPT_DETECTED, got: %q", got)
-	// }
-	// data, err := os.ReadFile(sendLog)
-	// if err != nil {
-	//     t.Fatalf("expected tmux send-keys to be called, but log missing: %v", err)
-	// }
-	// if !strings.Contains(string(data), "Enter") {
-	//     t.Errorf("expected Enter to be sent, got: %q", string(data))
-	// }
+	if !strings.Contains(string(data), "Enter") {
+		t.Errorf("expected Enter to be sent, got: %q", string(data))
+	}
 }
 
 // TestCheckPolecatHealth_IgnoresSickPaneWhenWorking is a POSITIVE guard test.
@@ -146,10 +135,11 @@ func TestCheckPolecatHealth_IgnoresSickPaneWhenWorking(t *testing.T) {
 
 	var logBuf strings.Builder
 	d := &Daemon{
-		config: &Config{TownRoot: t.TempDir()},
-		logger: log.New(&logBuf, "", 0),
-		tmux:   tmux.NewTmux(),
-		bdPath: bdPath,
+		config:        &Config{TownRoot: t.TempDir()},
+		logger:        log.New(&logBuf, "", 0),
+		tmux:          tmux.NewTmux(),
+		bdPath:        bdPath,
+		paneSnapshots: make(map[string]string),
 	}
 
 	d.checkPolecatHealth("myr", "mycat")
@@ -189,6 +179,7 @@ func TestCheckPolecatHealth_MissesStaleSession(t *testing.T) {
 		tmux:            tmux.NewTmux(),
 		bdPath:          bdPath,
 		postWakeStalled: make(map[string]time.Time),
+		paneSnapshots:   make(map[string]string),
 	}
 
 	// First check — should record the pane snapshot
@@ -197,14 +188,10 @@ func TestCheckPolecatHealth_MissesStaleSession(t *testing.T) {
 	d.checkPolecatHealth("myr", "mycat")
 
 	got := logBuf.String()
-	// NEGATIVE: current code sees session alive both times and does nothing.
-	if strings.Contains(got, "STALE_SESSION") {
-		t.Errorf("current code should NOT detect stale session, but got: %q", got)
+	// FIX IMPLEMENTED: daemon now detects unchanged pane across heartbeats.
+	if !strings.Contains(got, "STALE_SESSION") {
+		t.Errorf("expected STALE_SESSION on second check, got: %q", got)
 	}
-	// After fix, flip this assertion:
-	// if !strings.Contains(got, "STALE_SESSION") {
-	//     t.Errorf("expected STALE_SESSION on second check, got: %q", got)
-	// }
 }
 
 // TestCheckPolecatHealth_StaleSessionWithNoHook is a POSITIVE guard test.
@@ -232,6 +219,7 @@ func TestCheckPolecatHealth_StaleSessionWithNoHook(t *testing.T) {
 		tmux:            tmux.NewTmux(),
 		bdPath:          bdPath,
 		postWakeStalled: make(map[string]time.Time),
+		paneSnapshots:   make(map[string]string),
 	}
 
 	d.checkPolecatHealth("myr", "mycat")
@@ -351,6 +339,7 @@ func TestHeartbeat_DetectsRetirementLimbo(t *testing.T) {
 		tmux:            tmux.NewTmux(),
 		bdPath:          bdPath,
 		postWakeStalled: make(map[string]time.Time),
+		paneSnapshots:   make(map[string]string),
 	}
 
 	d.checkPolecatHealth("myr", "mycat")

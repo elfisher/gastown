@@ -99,6 +99,17 @@ type Daemon struct {
 	// lastMaintenanceRun tracks when scheduled maintenance last ran.
 	// Only accessed from heartbeat loop goroutine - no sync needed.
 	lastMaintenanceRun time.Time
+
+	// postWakeStalled tracks polecats nudged after sleep/wake detection.
+	// Maps session name → time nudged. If still stalled on next heartbeat, session is killed.
+	// Only accessed from heartbeat loop goroutine - no sync needed.
+	postWakeStalled map[string]time.Time
+
+	// paneSnapshots tracks the last captured pane content per session for
+	// staleness detection. If pane content is unchanged across two heartbeats
+	// and the polecat has work on hook, the session is considered stale.
+	// Only accessed from heartbeat loop goroutine - no sync needed.
+	paneSnapshots map[string]string
 }
 
 // sessionDeath records a detected session death for mass death analysis.
@@ -247,18 +258,20 @@ func New(config *Config) (*Daemon, error) {
 	}
 
 	return &Daemon{
-		config:         config,
-		patrolConfig:   patrolConfig,
-		tmux:           tmux.NewTmux(),
-		logger:         logger,
-		ctx:            ctx,
-		cancel:         cancel,
-		doltServer:     doltServer,
-		gtPath:         gtPath,
-		bdPath:         bdPath,
-		restartTracker: restartTracker,
-		otelProvider:   otelProvider,
-		metrics:        dm,
+		config:          config,
+		patrolConfig:    patrolConfig,
+		tmux:            tmux.NewTmux(),
+		logger:          logger,
+		ctx:             ctx,
+		cancel:          cancel,
+		doltServer:      doltServer,
+		gtPath:          gtPath,
+		bdPath:          bdPath,
+		restartTracker:  restartTracker,
+		otelProvider:    otelProvider,
+		metrics:         dm,
+		postWakeStalled: make(map[string]time.Time),
+		paneSnapshots:   make(map[string]string),
 	}, nil
 }
 
@@ -1919,7 +1932,9 @@ func (d *Daemon) checkPolecatHealth(rigName, polecatName string) {
 	}
 
 	if sessionAlive {
-		// Session is alive - nothing to do
+		// Session is alive — but it might be sick. Check pane content for
+		// known failure patterns before declaring it healthy.
+		d.checkPolecatSessionSickness(rigName, polecatName, sessionName)
 		return
 	}
 
@@ -1989,6 +2004,69 @@ func (d *Daemon) checkPolecatHealth(rigName, polecatName string) {
 
 	// Notify witness — stuck-agent-dog plugin handles context-aware restart
 	d.notifyWitnessOfCrashedPolecat(rigName, polecatName, info.HookBead)
+}
+
+// checkPolecatSessionSickness inspects the pane content of an alive session
+// for known failure patterns. The session exists but the agent inside may be
+// dead or stuck.
+//
+// Tier 1: Specific pattern matches (instant, targeted action)
+//   - "Select model" → send Enter to dismiss model selection UI
+//   - "ValidationException" → kill + notify witness for re-sling
+//
+// Tier 2: Generic staleness (slow, fallback)
+//   - Pane unchanged across two heartbeats + work on hook → nudge, then kill
+//
+// Working agents (⠋ Thinking...) are never flagged.
+func (d *Daemon) checkPolecatSessionSickness(rigName, polecatName, sessionName string) {
+	// Only check polecats with work on hook — idle polecats are allowed to sit.
+	prefix := beads.GetPrefixForRig(d.config.TownRoot, rigName)
+	agentBeadID := beads.PolecatBeadIDWithPrefix(prefix, rigName, polecatName)
+	info, err := d.getAgentBeadInfo(agentBeadID)
+	if err != nil || info.HookBead == "" {
+		return
+	}
+
+	// Capture pane content
+	paneContent, err := d.tmux.CapturePane(sessionName, 30)
+	if err != nil {
+		return
+	}
+
+	// Guard: if agent is actively working, don't flag anything.
+	if strings.Contains(paneContent, "⠋") || strings.Contains(paneContent, "Thinking") {
+		// Clear any stale snapshot — agent is alive and working
+		delete(d.paneSnapshots, sessionName)
+		return
+	}
+
+	// Tier 1: Specific pattern — model selection prompt
+	if strings.Contains(paneContent, "Select model") {
+		d.logger.Printf("MODEL_PROMPT_DETECTED: polecat %s/%s stuck on model selection, sending Enter", rigName, polecatName)
+		_ = d.tmux.SendKeysRaw(sessionName, "Enter")
+		return
+	}
+
+	// Tier 1: Specific pattern — API validation error
+	if strings.Contains(paneContent, "ValidationException") || strings.Contains(paneContent, "Improperly formed request") {
+		d.logger.Printf("SICK_SESSION: polecat %s/%s has ValidationException in pane, killing session", rigName, polecatName)
+		_ = d.tmux.KillSession(sessionName)
+		d.notifyWitnessOfCrashedPolecat(rigName, polecatName, info.HookBead)
+		delete(d.paneSnapshots, sessionName)
+		return
+	}
+
+	// Tier 2: Generic staleness — pane unchanged across heartbeats
+	if prev, ok := d.paneSnapshots[sessionName]; ok && prev == paneContent {
+		d.logger.Printf("STALE_SESSION: polecat %s/%s pane unchanged across heartbeats (hook=%s)", rigName, polecatName, info.HookBead)
+		// Nudge the agent — if still stale on next heartbeat, the Witness
+		// or GUPP violation check will escalate.
+		_ = d.tmux.SendKeysRaw(sessionName, "")
+		return
+	}
+
+	// Record current pane for next heartbeat comparison
+	d.paneSnapshots[sessionName] = paneContent
 }
 
 // recordSessionDeath records a session death and checks for mass death pattern.

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/events"
 	"github.com/steveyegge/gastown/internal/lock"
 	"github.com/steveyegge/gastown/internal/mail"
@@ -657,6 +658,16 @@ func runSling(cmd *cobra.Command, args []string) (retErr error) {
 	if len(args) > 1 {
 		target = args[1]
 	}
+
+	// Pre-flight: validate rig beads config before resolveTarget side-effects.
+	if target != "" {
+		if rigName, isRig := IsRigName(target); isRig {
+			if err := validateRigReady(townRoot, rigName); err != nil {
+				return err
+			}
+		}
+	}
+
 	resolved, err := resolveTarget(target, ResolveTargetOptions{
 		DryRun:     slingDryRun,
 		Force:      force,
@@ -1130,4 +1141,20 @@ func rollbackSlingArtifacts(spawnInfo *SpawnedPolecatInfo, beadID, hookWorkDir, 
 
 	// 3. Clean up the spawned polecat (worktree, agent bead, convoy, etc.)
 	cleanupSpawnedPolecat(spawnInfo, spawnInfo.RigName, convoyID)
+}
+
+// validateRigReady checks that a rig's beads database has the custom types
+// GT requires (agent, convoy, molecule, etc.). If types are missing, it
+// registers them automatically. Returns an error only if registration fails.
+// This prevents the 10-retry crash loop when bd init --force created a
+// vanilla database without GT's custom types.
+func validateRigReady(townRoot, rigName string) error {
+	rigBeadsDir := filepath.Join(townRoot, rigName, ".beads")
+	if _, err := os.Stat(rigBeadsDir); os.IsNotExist(err) {
+		return fmt.Errorf("rig %s has no beads database (missing %s)\nRun: gt rig dock %s", rigName, rigBeadsDir, rigName)
+	}
+	if err := beads.EnsureCustomTypes(rigBeadsDir); err != nil {
+		return fmt.Errorf("rig %s beads database is misconfigured: %w\nRun: bd config set types.custom \"%s\" in %s", rigName, err, constants.BeadsCustomTypes, rigBeadsDir)
+	}
+	return nil
 }

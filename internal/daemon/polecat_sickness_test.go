@@ -239,33 +239,11 @@ func TestCheckPolecatHealth_StaleSessionWithNoHook(t *testing.T) {
 // EXPECTED AFTER FIX: validateRigReady() returns an error when the rig's
 // beads DB is missing the "agent" custom type.
 func TestSlingPreflight_MissingCustomTypes(t *testing.T) {
-	// Create a minimal rig directory with a beads config that has no custom types
-	townRoot := t.TempDir()
-	rigPath := filepath.Join(townRoot, "myr")
-	beadsDir := filepath.Join(rigPath, ".beads")
-	if err := os.MkdirAll(beadsDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	// Write a config.yaml with no custom types
-	configYAML := "issue_prefix: my\n"
-	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte(configYAML), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// NEGATIVE: validateRigReady doesn't exist yet.
-	// This test documents that the function should exist and catch this case.
-	//
-	// After fix:
-	// err := validateRigReady(townRoot, "myr")
-	// if err == nil {
-	//     t.Error("expected validateRigReady to fail for rig missing custom types")
-	// }
-	// if !strings.Contains(err.Error(), "agent") {
-	//     t.Errorf("expected error to mention missing 'agent' type, got: %v", err)
-	// }
-
-	// For now, just verify the function doesn't exist by documenting the gap
-	t.Log("NEGATIVE TEST: validateRigReady() does not exist yet — rig validation is not performed before sling")
+	// IMPLEMENTED: validateRigReady() now exists in internal/cmd/sling.go.
+	// It calls beads.EnsureCustomTypes which auto-registers missing types.
+	// Actual tests are in internal/cmd/sling_preflight_test.go since the
+	// function lives in the cmd package.
+	t.Log("COVERED: validateRigReady() implemented — see internal/cmd/sling_preflight_test.go")
 }
 
 // TestSlingPreflight_ValidRig is a POSITIVE guard test.
@@ -273,24 +251,9 @@ func TestSlingPreflight_MissingCustomTypes(t *testing.T) {
 //
 // This test should pass after the fix is implemented.
 func TestSlingPreflight_ValidRig(t *testing.T) {
-	townRoot := t.TempDir()
-	rigPath := filepath.Join(townRoot, "myr")
-	beadsDir := filepath.Join(rigPath, ".beads")
-	if err := os.MkdirAll(beadsDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	configYAML := "issue_prefix: my\ntypes:\n  custom: agent,role,rig,convoy,slot,queue,event,message,molecule,gate,merge-request\n"
-	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte(configYAML), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// After fix:
-	// err := validateRigReady(townRoot, "myr")
-	// if err != nil {
-	//     t.Errorf("expected valid rig to pass validation, got: %v", err)
-	// }
-
-	t.Log("POSITIVE GUARD: validateRigReady() does not exist yet — will verify valid rigs pass once implemented")
+	// IMPLEMENTED: validateRigReady() auto-fixes missing types via EnsureCustomTypes.
+	// See internal/cmd/sling_preflight_test.go for actual tests.
+	t.Log("COVERED: validateRigReady() implemented — see internal/cmd/sling_preflight_test.go")
 }
 
 // --- Doctor per-rig validation ---

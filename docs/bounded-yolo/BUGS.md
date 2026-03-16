@@ -29,6 +29,16 @@
 - **Root cause:** "Session start deferred" is a terminal state with no follow-through mechanism.
 - **Fix:** When sling reuses an idle polecat, it must either start the tmux session immediately or ensure the daemon picks it up on the next heartbeat.
 
+### BUG: GT/beads split-brain initialization
+- **Symptom:** Running `bd init --force` directly creates a valid beads database but one missing everything GT layered on top — custom issue types, polecat worktree redirects, routing config, metadata. GT assumes those exist and doesn't validate before spawning work. Polecats spawn, sessions crash, daemon logs the crash every heartbeat, nothing self-heals.
+- **Root cause:** GT and beads have separate initialization models. GT manages rigs and knows about custom types/redirects/routing. Beads manages its own database with its own init. Neither validates the other's assumptions.
+- **Impact:** Silent failures. The config gap isn't caught by any existing doctor check at the right level.
+- **Fix options (pick one):**
+  - (a) Make `bd init` GT-aware: when running inside a GT town, automatically inherit GT's requirements (custom types, redirects, routing)
+  - (b) GT owns rig init end-to-end: block or wrap `bd init --force` so it can't create a half-configured database. Add `gt rig repair <name>` that re-applies the full GT schema
+  - (c) GT validates the full beads config chain (types, redirects, routing) before every sling and fails fast with a repair command if anything is missing
+- **Related:** "BUG: `bd init --force` inside a GT town creates vanilla beads DB" and "BUG: `gt doctor` doesn't check per-rig beads types" are symptoms of this same root cause
+
 ### BUG: `bd init --force` inside a GT town creates vanilla beads DB
 - **Symptom:** `bd init --force --prefix dd` recreated the DB but only registered standard types (task, bug, feature). GT requires custom types (agent, molecule, convoy, etc.). Every `gt sling` attempt failed with `invalid issue type: agent` after 10 retries.
 - **Fix:** When `bd init` runs inside a GT town (detectable via `GT_TOWN_ROOT` or presence of `config.yaml`), automatically register GT's custom types.

@@ -1,11 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { listRigs } from "./data/rigs.js";
 import { getMayorMessages } from "./data/mayor.js";
+import { getPipelineData } from "./data/pipeline.js";
 import { renderLayout } from "./pages/layout.js";
 import { renderMayorPage } from "./pages/mayor.js";
+import { renderPipelinePage } from "./pages/pipeline.js";
 import { registerMayorApi } from "./api/mayor.js";
 import { renderRigPage } from "./pages/rig.js";
 import { renderConvoyPage } from "./pages/convoy.js";
+import { registerPipelineApi } from "./api/pipeline.js";
 import type { Rig } from "./data/schemas.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -27,13 +30,33 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return `<div class="prose"><h1>${name}</h1><p class="text-base-content/60">Coming soon</p></div>`;
   }
 
-  app.get("/", async (_req, reply) => {
-    const html = await withLayout("Pipeline", placeholder("Pipeline"), "/");
+  app.get("/", async (req, reply) => {
+    const rig = (req.query as Record<string, string>).rig || undefined;
+    const priority = (req.query as Record<string, string>).priority || undefined;
+    const data = await getPipelineData({
+      rig,
+      priority: priority ? parseInt(priority, 10) : undefined,
+    });
+    const html = await withLayout(
+      "Pipeline",
+      renderPipelinePage(data, rig, priority),
+      "/"
+    );
     return reply.type("text/html").send(html);
   });
 
-  app.get("/pipeline", async (_req, reply) => {
-    const html = await withLayout("Pipeline", placeholder("Pipeline"), "/pipeline");
+  app.get("/pipeline", async (req, reply) => {
+    const rig = (req.query as Record<string, string>).rig || undefined;
+    const priority = (req.query as Record<string, string>).priority || undefined;
+    const data = await getPipelineData({
+      rig,
+      priority: priority ? parseInt(priority, 10) : undefined,
+    });
+    const html = await withLayout(
+      "Pipeline",
+      renderPipelinePage(data, rig, priority),
+      "/pipeline"
+    );
     return reply.type("text/html").send(html);
   });
 
@@ -97,4 +120,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Mayor API endpoints
   await registerMayorApi(app);
+
+  // Pipeline API endpoints
+  await registerPipelineApi(app);
 }

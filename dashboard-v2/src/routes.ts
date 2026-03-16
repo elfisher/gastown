@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { listRigs } from "./data/rigs.js";
 import { getMayorMessages } from "./data/mayor.js";
 import { getPipelineData } from "./data/pipeline.js";
+import { listAgents, getAgentPreview, getAgentOutput } from "./data/agents.js";
 import { renderLayout } from "./pages/layout.js";
 import { renderMayorPage } from "./pages/mayor.js";
 import { renderPipelinePage } from "./pages/pipeline.js";
@@ -9,6 +10,8 @@ import { registerMayorApi } from "./api/mayor.js";
 import { renderRigPage } from "./pages/rig.js";
 import { renderConvoyPage } from "./pages/convoy.js";
 import { registerPipelineApi } from "./api/pipeline.js";
+import { renderAgentsPage, renderAgentDetailPage } from "./pages/agents.js";
+import { registerAgentsApi } from "./api/agents.js";
 import type { Rig } from "./data/schemas.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -61,7 +64,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/agents", async (_req, reply) => {
-    const html = await withLayout("Agents", placeholder("Agents"), "/agents");
+    const agents = await listAgents();
+    for (const a of agents) {
+      a.preview = await getAgentPreview(a.session);
+    }
+    const html = await withLayout(
+      "Agents",
+      renderAgentsPage(agents),
+      "/agents"
+    );
     return reply.type("text/html").send(html);
   });
 
@@ -112,15 +123,29 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { name: string } }>(
     "/agent/:name",
     async (req, reply) => {
-      const name = req.params.name;
-      const html = await withLayout(`Agent: ${name}`, placeholder(`Agent: ${name}`));
+      const sessionName = req.params.name;
+      const agents = await listAgents();
+      const agent = agents.find((a) => a.session === sessionName);
+      if (!agent) {
+        const safe = sessionName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const html = await withLayout(
+          "Agent Not Found",
+          `<div class="prose"><h1>Agent Not Found</h1><p>${safe} is not an active session.</p></div>`
+        );
+        return reply.status(404).type("text/html").send(html);
+      }
+      const output = await getAgentOutput(sessionName, 20);
+      const html = await withLayout(
+        `Agent: ${agent.name}`,
+        renderAgentDetailPage(agent, output),
+        "/agents"
+      );
       return reply.type("text/html").send(html);
     }
   );
 
-  // Mayor API endpoints
+  // API endpoints
   await registerMayorApi(app);
-
-  // Pipeline API endpoints
   await registerPipelineApi(app);
+  await registerAgentsApi(app);
 }

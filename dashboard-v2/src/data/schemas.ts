@@ -13,6 +13,23 @@ export const RigSchema = z.object({
 export type Rig = z.infer<typeof RigSchema>;
 export const RigListSchema = z.array(RigSchema);
 
+export const AgentSchema = z.object({
+  name: z.string(),
+  rig: z.string(),
+  role: z.enum(["mayor", "deacon", "witness", "refinery", "polecat", "crew", "boot"]),
+  session: z.string(),
+  status: z.enum(["working", "idle", "dead"]),
+  runtime: z.string().optional(),
+  startedAt: z.string(),
+  lastActivity: z.string(),
+  currentWork: z.string().optional(),
+  preview: z.string().optional(),
+});
+
+export const AgentListSchema = z.array(AgentSchema);
+
+export type Agent = z.infer<typeof AgentSchema>;
+
 export const MayorMessageSchema = z.object({
   sender: z.enum(["mayor", "human", "system"]),
   text: z.string(),

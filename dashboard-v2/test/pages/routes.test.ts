@@ -11,7 +11,6 @@ describe("routes", () => {
     "/rig/gastown",
     "/convoy/test-123",
     "/bead/gt-abc12",
-    "/agent/furiosa",
   ];
 
   for (const path of routes) {
@@ -23,6 +22,14 @@ describe("routes", () => {
       await app.close();
     });
   }
+
+  it("GET /agent/:name returns 404 for unknown session", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/agent/nonexistent" });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers["content-type"]).toContain("text/html");
+    await app.close();
+  });
 
   it("layout contains left nav", async () => {
     const app = await buildApp();

@@ -1,49 +1,89 @@
 import { exec } from "./exec.js";
-import { AgentListSchema, type Agent } from "./schemas.js";
-import { getGtRoot } from "../config.js";
+import type { Agent } from "./schemas.js";
+
+const SYSTEM_ROLES = new Map<string, Agent["role"]>([
+  ["mayor", "mayor"],
+  ["deacon", "deacon"],
+  ["witness", "witness"],
+  ["refinery", "refinery"],
+  ["boot", "boot"],
+]);
+
+function parseSession(name: string): { rig: string; role: Agent["role"]; agentName: string } | null {
+  const dash = name.indexOf("-");
+  if (dash < 0) return null;
+  const prefix = name.slice(0, dash);
+  const suffix = name.slice(dash + 1);
+  const role = SYSTEM_ROLES.get(suffix) ?? "polecat";
+  return { rig: prefix, role, agentName: suffix };
+}
 
 export async function listAgents(): Promise<Agent[]> {
-  const root = getGtRoot();
+  let stdout: string;
   try {
-    const { stdout } = await exec("gt", ["agents", "list", "--all"], { cwd: root });
-    return parseAgentList(stdout);
+    const result = await exec(
+      "tmux",
+      ["list-sessions", "-F", "#{session_name}:#{session_created}:#{session_activity}"],
+      { timeoutMs: 5_000 }
+    );
+    stdout = result.stdout;
   } catch {
     return [];
   }
-}
 
-function parseAgentList(text: string): Agent[] {
   const agents: Agent[] = [];
-  let currentRig = "";
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const rigMatch = /^──\s+(\S+)\s+──$/.exec(trimmed);
-    if (rigMatch) {
-      currentRig = rigMatch[1] ?? "";
-      continue;
-    }
-    const agentMatch = /^\S+\s+(.+)$/.exec(trimmed);
-    if (agentMatch) {
-      const raw = agentMatch[1] ?? "";
-      const name = raw.replace(/\s*\(.*\)$/, "").trim();
-      const role = inferRole(name, trimmed);
-      agents.push({ name, rig: currentRig || undefined, role, status: undefined, session_id: undefined });
-    }
-  }
-  return AgentListSchema.parse(agents);
-}
+  for (const line of stdout.split("\n")) {
+    if (!line.trim()) continue;
+    const [session, createdStr, activityStr] = line.split(":");
+    if (!session) continue;
+    const parsed = parseSession(session);
+    if (!parsed) continue;
 
-function inferRole(name: string, line: string): string {
-  if (line.includes("🎩")) return "mayor";
-  if (line.includes("🐺")) return "deacon";
-  if (line.includes("🏭")) return "refinery";
-  if (line.includes("🦉")) return "witness";
-  if (line.includes("🦨")) return "polecat";
-  return name.toLowerCase();
+    const created = new Date(Number(createdStr) * 1000).toISOString();
+    const activity = new Date(Number(activityStr) * 1000).toISOString();
+    const ageSec = (Date.now() - Number(activityStr) * 1000) / 1000;
+    const status: Agent["status"] = ageSec > 600 ? "idle" : "working";
+
+    agents.push({
+      name: parsed.agentName,
+      rig: parsed.rig,
+      role: parsed.role,
+      session,
+      status,
+      startedAt: created,
+      lastActivity: activity,
+    });
+  }
+  return agents;
 }
 
 export async function listAgentsForRig(rigName: string): Promise<Agent[]> {
   const all = await listAgents();
   return all.filter((a) => a.rig === rigName);
+}
+
+export async function getAgentPreview(sessionName: string, lines = 5): Promise<string> {
+  try {
+    const result = await exec(
+      "tmux",
+      ["capture-pane", "-t", sessionName, "-p", "-S", `-${lines}`],
+      { timeoutMs: 5_000 }
+    );
+    return result.stdout.trimEnd();
+  } catch {
+    return "(session not available)";
+  }
+}
+
+export async function getAgentOutput(sessionName: string, lines = 20): Promise<string> {
+  try {
+    const result = await exec(
+      "tmux",
+      ["capture-pane", "-t", sessionName, "-p", "-S", `-${lines}`],
+      { timeoutMs: 5_000 }
+    );
+    return result.stdout.trimEnd();
+  } catch {
+    return "(session not available)";
+  }
 }

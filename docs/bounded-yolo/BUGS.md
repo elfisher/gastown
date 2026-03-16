@@ -122,6 +122,17 @@ These two changes cover all 12 open bugs through the same mechanisms GT already 
   - Detect the stuck model-selection prompt via tmux capture-pane and auto-select (similar to how sleep/wake nudging works)
   - Pass a flag or env var that tells the agent runtime to never prompt interactively for model selection
 
+### BUG: Rig boot race condition — witness sleeps before refinery is ready
+- **Symptom:** Polecat finishes work quickly, submits to merge queue, enters "waiting for retirement." Witness patrols, sees refinery not yet running, concludes "rig is idle," goes to sleep. Refinery boots shortly after but witness is asleep. Nobody processes the MR or retires the polecat. Work stalls indefinitely.
+- **Root cause:** Witness patrol is a point-in-time snapshot with no retry. If the refinery isn't up when the witness patrols, it moves on. The stop hook that wakes the witness only fires on new external activity — a refinery coming online doesn't trigger it.
+- **Compounding factor:** Kiro CLI nudge falls back to queue mode (no prompt detection). Queued nudges only deliver when the stop hook fires, but a sleeping agent never finishes a turn, so nudges never arrive. Had to bypass nudge system and send keys directly to tmux pane.
+- **Impact:** Polecat sits idle saying "waiting for retirement..." indefinitely. MR sits unprocessed.
+- **Fix:** This is another case for the daemon heartbeat safety net. The daemon already checks polecat session health every 3 minutes. Add detection for: "polecat waiting for retirement + MR in queue + refinery alive for >N minutes" → auto-nudge the witness via direct tmux send-keys (bypassing the broken queue-mode nudge path).
+- **Additional fixes:**
+  - Witness should schedule a follow-up patrol if it sees "refinery down" instead of going to sleep
+  - Refinery should self-check the merge queue on boot instead of waiting for the witness
+  - Consider boot sequencing: start polecats only after witness and refinery are confirmed running, or have the witness do a second patrol N seconds after boot
+
 ## P2 — Improvements
 
 ### TODO: Session rotation for long-running agents

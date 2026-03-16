@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 )
 
@@ -606,6 +607,7 @@ func containsFlag(s, flag string) bool {
 type CustomTypesCheck struct {
 	FixableCheck
 	missingTypes []string // Cached during Run for use in Fix
+	missingRigs  []string // Rigs with missing types (cached for Fix)
 	townRoot     string   // Cached during Run for use in Fix
 }
 
@@ -680,6 +682,18 @@ func (c *CustomTypesCheck) Run(ctx *CheckContext) *CheckResult {
 	}
 
 	if len(missing) == 0 {
+		// Town-level types are OK. Now check per-rig beads databases.
+		rigFailures := c.checkPerRigTypes(ctx)
+		if len(rigFailures) > 0 {
+			c.townRoot = ctx.TownRoot
+			return &CheckResult{
+				Name:    c.Name(),
+				Status:  StatusWarning,
+				Message: fmt.Sprintf("%d rig(s) missing custom types", len(rigFailures)),
+				Details: rigFailures,
+				FixHint: "Run 'gt doctor --fix' to register missing types in all rigs",
+			}
+		}
 		return &CheckResult{
 			Name:    c.Name(),
 			Status:  StatusOK,
@@ -718,13 +732,61 @@ func parseConfigOutput(output []byte) string {
 
 // Fix registers the missing custom types.
 func (c *CustomTypesCheck) Fix(ctx *CheckContext) error {
-	cmd := exec.Command("bd", "config", "set", "types.custom", constants.BeadsCustomTypes)
-	cmd.Dir = c.townRoot
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("bd config set types.custom: %s", strings.TrimSpace(string(output)))
+	// Fix town-level types
+	if len(c.missingTypes) > 0 {
+		cmd := exec.Command("bd", "config", "set", "types.custom", constants.BeadsCustomTypes)
+		cmd.Dir = c.townRoot
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("bd config set types.custom: %s", strings.TrimSpace(string(output)))
+		}
+	}
+	// Fix per-rig types
+	for _, rigName := range c.missingRigs {
+		rigBeadsDir := filepath.Join(ctx.TownRoot, rigName, ".beads")
+		cmd := exec.Command("bd", "config", "set", "types.custom", constants.BeadsCustomTypes)
+		cmd.Dir = rigBeadsDir
+		cmd.Env = append(os.Environ(), "BEADS_DIR="+rigBeadsDir)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("fix types for rig %s: %s", rigName, strings.TrimSpace(string(output)))
+		}
 	}
 	return nil
+}
+
+// checkPerRigTypes checks each rig's beads database for custom types.
+// Returns a list of failure descriptions for rigs with missing types.
+func (c *CustomTypesCheck) checkPerRigTypes(ctx *CheckContext) []string {
+	rigsConfigPath := filepath.Join(ctx.TownRoot, "mayor", "rigs.json")
+	rigsConfig, err := config.LoadRigsConfig(rigsConfigPath)
+	if err != nil {
+		return nil // No rigs config — nothing to check
+	}
+
+	var failures []string
+	for rigName := range rigsConfig.Rigs {
+		rigBeadsDir := filepath.Join(ctx.TownRoot, rigName, ".beads")
+		if _, err := os.Stat(rigBeadsDir); os.IsNotExist(err) {
+			continue // Rig has no beads dir — skip
+		}
+
+		cmd := exec.Command("bd", "config", "get", "types.custom")
+		cmd.Dir = rigBeadsDir
+		cmd.Env = append(os.Environ(), "BEADS_DIR="+rigBeadsDir)
+		output, err := cmd.Output()
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("rig %s: types not configured", rigName))
+			c.missingRigs = append(c.missingRigs, rigName)
+			continue
+		}
+
+		configuredTypes := parseConfigOutput(output)
+		if !strings.Contains(configuredTypes, "agent") {
+			failures = append(failures, fmt.Sprintf("rig %s: missing 'agent' type (has: %s)", rigName, configuredTypes))
+			c.missingRigs = append(c.missingRigs, rigName)
+		}
+	}
+	return failures
 }
 
 // CustomStatusesCheck verifies Gas Town custom statuses are registered with beads.

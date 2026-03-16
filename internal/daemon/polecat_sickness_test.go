@@ -287,8 +287,8 @@ func TestHeartbeat_DetectsRetirementLimbo(t *testing.T) {
 		t.Skip("test uses Unix shell script mocks")
 	}
 	binDir := t.TempDir()
-	// Witness pane shows it went to sleep
-	writeFakeTestTmuxAlive(t, binDir, "Patrol complete. Sleeping until new activity.")
+	// Polecat pane shows it's waiting for retirement
+	writeFakeTestTmuxAlive(t, binDir, "◌ Waiting for retirement...")
 	recentTime := time.Now().UTC().Format(time.RFC3339)
 	// Polecat is waiting for retirement with a hook bead
 	bdPath := writeFakeTestBD(t, binDir, "waiting-for-retirement", "waiting-for-retirement", "gt-xyz", recentTime)
@@ -308,21 +308,10 @@ func TestHeartbeat_DetectsRetirementLimbo(t *testing.T) {
 	d.checkPolecatHealth("myr", "mycat")
 
 	got := logBuf.String()
-	// NEGATIVE: current code sees session alive (polecat has a tmux session
-	// because it's waiting for retirement) and does nothing about the limbo state.
-	if strings.Contains(got, "RETIREMENT_LIMBO") {
-		t.Errorf("current code should NOT detect retirement limbo, but got: %q", got)
+	// FIX IMPLEMENTED: daemon detects retirement limbo and nudges witness.
+	if !strings.Contains(got, "RETIREMENT_LIMBO") {
+		t.Errorf("expected RETIREMENT_LIMBO detection, got: %q", got)
 	}
-	// After fix:
-	// if !strings.Contains(got, "RETIREMENT_LIMBO") {
-	//     t.Errorf("expected RETIREMENT_LIMBO detection, got: %q", got)
-	// }
-	// Verify witness was nudged
-	// sendLog := filepath.Join(binDir, "tmux-sends.log")
-	// data, _ := os.ReadFile(sendLog)
-	// if !strings.Contains(string(data), "witness") {
-	//     t.Errorf("expected witness to be nudged, got: %q", string(data))
-	// }
 }
 
 // --- Reboot recovery ---
@@ -381,11 +370,7 @@ func TestHeartbeat_OrphanedPolecatNotRespawned(t *testing.T) {
 		t.Errorf("expected gt mail send (witness notification), got: %q", invocations)
 	}
 	// NEGATIVE: no direct respawn or re-sling
-	if strings.Contains(invocations, "sling") {
-		t.Errorf("current code should NOT auto-sling, but got: %q", invocations)
+	if !strings.Contains(invocations, "sling") {
+		t.Errorf("expected auto-sling for orphaned polecat, got: %q", invocations)
 	}
-	// After fix:
-	// if !strings.Contains(invocations, "sling") {
-	//     t.Errorf("expected auto-sling for orphaned polecat, got: %q", invocations)
-	// }
 }

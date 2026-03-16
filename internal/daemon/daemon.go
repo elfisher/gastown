@@ -2004,6 +2004,17 @@ func (d *Daemon) checkPolecatHealth(rigName, polecatName string) {
 
 	// Notify witness — stuck-agent-dog plugin handles context-aware restart
 	d.notifyWitnessOfCrashedPolecat(rigName, polecatName, info.HookBead)
+
+	// Auto-respawn: re-sling the hooked bead to a fresh polecat.
+	// This is the direct recovery path — don't rely solely on the witness
+	// being alive and responsive (it may also be dead after a reboot).
+	d.logger.Printf("Auto-respawning: re-slinging %s to %s", info.HookBead, rigName)
+	slingCmd := exec.Command(d.gtPath, "sling", info.HookBead, rigName, "--force")
+	slingCmd.Dir = d.config.TownRoot
+	slingCmd.Env = append(os.Environ(), "BD_ACTOR=daemon")
+	if output, err := slingCmd.CombinedOutput(); err != nil {
+		d.logger.Printf("Warning: auto-respawn failed for %s: %s: %v", info.HookBead, strings.TrimSpace(string(output)), err)
+	}
 }
 
 // checkPolecatSessionSickness inspects the pane content of an alive session
@@ -2044,6 +2055,17 @@ func (d *Daemon) checkPolecatSessionSickness(rigName, polecatName, sessionName s
 	if strings.Contains(paneContent, "Select model") {
 		d.logger.Printf("MODEL_PROMPT_DETECTED: polecat %s/%s stuck on model selection, sending Enter", rigName, polecatName)
 		_ = d.tmux.SendKeysRaw(sessionName, "Enter")
+		return
+	}
+
+	// Tier 1: Specific pattern — waiting for retirement (boot race condition)
+	// Polecat finished work and is waiting for the refinery to process its MR.
+	// If the witness is sleeping (booted after polecat finished), nobody will
+	// retire the polecat. Nudge the witness directly via tmux send-keys.
+	if strings.Contains(paneContent, "Waiting for retirement") {
+		witnessSession := session.WitnessSessionName(session.PrefixFor(rigName))
+		d.logger.Printf("RETIREMENT_LIMBO: polecat %s/%s waiting for retirement, nudging witness %s", rigName, polecatName, witnessSession)
+		_ = d.tmux.SendKeys(witnessSession, "Check polecat "+polecatName+" — it's waiting for retirement and may have a pending MR.")
 		return
 	}
 

@@ -1,4 +1,4 @@
-import { getRig } from "../data/rigs.js";
+import { getRig, getRigRepoInfo, getMergeQueue } from "../data/rigs.js";
 import { listConvoys } from "../data/convoys.js";
 import { listAgentsForRig } from "../data/agents.js";
 import { getEventsForRig } from "../data/events.js";
@@ -16,11 +16,40 @@ export async function renderRigPage(name: string): Promise<string> {
     return `<div class="prose"><h1>Rig Not Found</h1><p>No rig named "${escapeHtml(name)}".</p></div>`;
   }
 
-  const [allConvoys, agents, events] = await Promise.all([
+  const [allConvoys, agents, events, repoInfo, mqItems] = await Promise.all([
     listConvoys().catch(() => []),
     listAgentsForRig(name).catch(() => []),
     getEventsForRig(name, "1h").catch(() => []),
+    getRigRepoInfo(name).catch(() => undefined),
+    getMergeQueue(name).catch(() => []),
   ]);
+
+  // Repo info for header
+  const repoUrl = repoInfo?.url ?? "";
+  const displayUrl = repoUrl.replace(/\.git$/, "").replace(/^https?:\/\//, "");
+  const repoLink = repoUrl
+    ? `<a href="${escapeHtml(repoUrl.replace(/\.git$/, ""))}" class="link link-hover text-sm font-mono" target="_blank" rel="noopener">${escapeHtml(displayUrl)}</a>`
+    : `<span class="text-base-content/50 text-sm">no remote</span>`;
+  const branchBadge = repoInfo?.branch
+    ? `<span class="badge badge-outline badge-sm font-mono">${escapeHtml(repoInfo.branch)}</span>`
+    : "";
+
+  // Merge queue section
+  const mqSection = mqItems.length > 0
+    ? `<div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead><tr><th>ID</th><th>Issue</th><th>Worker</th><th>Status</th></tr></thead>
+          <tbody>${mqItems.map((m) => `
+            <tr>
+              <td class="font-mono text-xs">${escapeHtml(m.id)}</td>
+              <td>${m.issue ? linkify(escapeHtml(m.issue)) : "—"}</td>
+              <td>${m.worker ? escapeHtml(m.worker) : "—"}</td>
+              <td>${statusBadge(m.status)}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`
+    : `<p class="text-base-content/50 text-sm">Queue empty</p>`;
 
   const convoyCards = allConvoys.length > 0
     ? allConvoys.map((c) => `
@@ -57,8 +86,11 @@ export async function renderRigPage(name: string): Promise<string> {
   return `
 ${breadcrumbs([{ label: "Gas Town", href: "/" }, { label: rig.name }])}
 
-<div class="prose max-w-none mb-6">
-  <h1>Rig: ${escapeHtml(rig.name)}</h1>
+<div class="mb-6">
+  <h1 class="text-2xl font-bold">Rig: ${escapeHtml(rig.name)}</h1>
+  <div class="flex flex-wrap items-center gap-2 mt-1">
+    ${repoLink} ${branchBadge}
+  </div>
 </div>
 
 <div class="stats shadow mb-6">
@@ -86,7 +118,10 @@ ${breadcrumbs([{ label: "Gas Town", href: "/" }, { label: rig.name }])}
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
   <div class="lg:col-span-2">
-    <h2 class="text-lg font-bold mb-3">Convoys</h2>
+    <h2 class="text-lg font-bold mb-3">Merge Queue</h2>
+    ${mqSection}
+
+    <h2 class="text-lg font-bold mt-6 mb-3">Convoys</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       ${convoyCards}
     </div>

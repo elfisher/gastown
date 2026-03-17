@@ -93,6 +93,24 @@ export const ConvoySchema = z.object({
 export type Convoy = z.infer<typeof ConvoySchema>;
 export const ConvoyListSchema = z.array(ConvoySchema);
 
+// --- Merge Queue ---
+export const MergeQueueItemSchema = z.object({
+  id: z.string(),
+  branch: z.string().optional(),
+  issue: z.string().optional(),
+  worker: z.string().optional(),
+  status: z.string(),
+  submitted_at: z.string().optional(),
+});
+export type MergeQueueItem = z.infer<typeof MergeQueueItemSchema>;
+export const MergeQueueSchema = z.array(MergeQueueItemSchema);
+
+// --- Repo Info ---
+export interface RepoInfo {
+  url: string;
+  branch: string;
+}
+
 // --- Event (from gt feed --plain) ---
 export const EventSchema = z.object({
   timestamp: z.string(),

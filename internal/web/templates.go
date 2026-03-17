@@ -30,6 +30,7 @@ type ConvoyData struct {
 	Issues      []IssueRow
 	Activity    []ActivityRow
 	Summary     *DashboardSummary
+	Scoreboard  *ScoreboardData
 	Expand      string // Panel to show fullscreen (from ?expand=name)
 	CSRFToken   string // Token for CSRF protection on POST requests
 }
@@ -119,9 +120,29 @@ type IssueRow struct {
 	Title    string // Issue title
 	Type     string // issue, bug, feature, task
 	Priority int    // 1=critical, 2=high, 3=medium, 4=low
+	Status   string // open, hooked, closed, in_progress, blocked, deferred
 	Age      string // Time since created
 	Labels   string // Comma-separated labels
 	Assignee string // Who it's hooked to (empty if unassigned)
+}
+
+// ScoreboardData provides a project progress overview grouped by status.
+type ScoreboardData struct {
+	Done        []ScoreboardItem
+	InProgress  []ScoreboardItem
+	Open        []ScoreboardItem
+	DoneCount   int
+	InProgCount int
+	OpenCount   int
+	Total       int
+	DonePct     int // 0-100
+	InProgPct   int // 0-100
+}
+
+// ScoreboardItem is a single issue in the scoreboard.
+type ScoreboardItem struct {
+	ID    string
+	Title string
 }
 
 // ActivityRow represents an event in the activity feed.

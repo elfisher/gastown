@@ -1570,6 +1570,7 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 		ID        string   `json:"id"`
 		Title     string   `json:"title"`
 		Type      string   `json:"type"`
+		Status    string   `json:"status"`
 		Priority  int      `json:"priority"`
 		Labels    []string `json:"labels"`
 		CreatedAt string   `json:"created_at"`
@@ -1581,6 +1582,7 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 			ID        string   `json:"id"`
 			Title     string   `json:"title"`
 			Type      string   `json:"type"`
+			Status    string   `json:"status"`
 			Priority  int      `json:"priority"`
 			Labels    []string `json:"labels"`
 			CreatedAt string   `json:"created_at"`
@@ -1596,6 +1598,7 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 			ID        string   `json:"id"`
 			Title     string   `json:"title"`
 			Type      string   `json:"type"`
+			Status    string   `json:"status"`
 			Priority  int      `json:"priority"`
 			Labels    []string `json:"labels"`
 			CreatedAt string   `json:"created_at"`
@@ -1630,6 +1633,7 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 			ID:       bead.ID,
 			Title:    bead.Title,
 			Type:     bead.Type,
+			Status:   bead.Status,
 			Priority: bead.Priority,
 		}
 
@@ -1675,6 +1679,84 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 	})
 
 	return rows, nil
+}
+
+// scoreboardBead is the JSON shape returned by bd list for scoreboard queries.
+type scoreboardBead struct {
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	Type      string   `json:"type"`
+	Status    string   `json:"status"`
+	Labels    []string `json:"labels"`
+}
+
+// isScoreboardInternal returns true if the bead is an internal type that should
+// be excluded from the scoreboard.
+func isScoreboardInternal(b scoreboardBead) bool {
+	switch b.Type {
+	case "message", "convoy", "queue", "merge-request", "wisp", "agent":
+		return true
+	}
+	for _, l := range b.Labels {
+		switch l {
+		case "gt:message", "gt:convoy", "gt:queue", "gt:merge-request", "gt:wisp", "gt:agent":
+			return true
+		}
+	}
+	return false
+}
+
+// FetchScoreboard returns project progress grouped by status (done/in-progress/open).
+func (f *LiveConvoyFetcher) FetchScoreboard() (*ScoreboardData, error) {
+	sb := &ScoreboardData{}
+
+	fetch := func(status string) []scoreboardBead {
+		stdout, err := f.runBdCmd(f.townRoot, "list", "--status="+status, "--json", "--limit=100")
+		if err != nil {
+			return nil
+		}
+		var beads []scoreboardBead
+		if err := json.Unmarshal(stdout.Bytes(), &beads); err != nil {
+			return nil
+		}
+		return beads
+	}
+
+	for _, b := range fetch("closed") {
+		if isScoreboardInternal(b) {
+			continue
+		}
+		sb.Done = append(sb.Done, ScoreboardItem{ID: b.ID, Title: b.Title})
+	}
+	for _, b := range fetch("hooked") {
+		if isScoreboardInternal(b) {
+			continue
+		}
+		sb.InProgress = append(sb.InProgress, ScoreboardItem{ID: b.ID, Title: b.Title})
+	}
+	for _, b := range fetch("in_progress") {
+		if isScoreboardInternal(b) {
+			continue
+		}
+		sb.InProgress = append(sb.InProgress, ScoreboardItem{ID: b.ID, Title: b.Title})
+	}
+	for _, b := range fetch("open") {
+		if isScoreboardInternal(b) {
+			continue
+		}
+		sb.Open = append(sb.Open, ScoreboardItem{ID: b.ID, Title: b.Title})
+	}
+
+	sb.DoneCount = len(sb.Done)
+	sb.InProgCount = len(sb.InProgress)
+	sb.OpenCount = len(sb.Open)
+	sb.Total = sb.DoneCount + sb.InProgCount + sb.OpenCount
+	if sb.Total > 0 {
+		sb.DonePct = sb.DoneCount * 100 / sb.Total
+		sb.InProgPct = sb.InProgCount * 100 / sb.Total
+	}
+
+	return sb, nil
 }
 
 // FetchActivity returns recent activity from the event log.

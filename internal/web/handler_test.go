@@ -87,6 +87,10 @@ func (m *MockConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 	return m.Issues, nil
 }
 
+func (m *MockConvoyFetcher) FetchScoreboard() (*ScoreboardData, error) {
+	return &ScoreboardData{}, nil
+}
+
 func (m *MockConvoyFetcher) FetchActivity() ([]ActivityRow, error) {
 	return m.Activity, nil
 }
@@ -1053,6 +1057,10 @@ func (m *MockConvoyFetcherWithErrors) FetchMayor() (*MayorStatus, error) {
 }
 
 func (m *MockConvoyFetcherWithErrors) FetchIssues() ([]IssueRow, error) {
+	return nil, nil
+}
+
+func (m *MockConvoyFetcherWithErrors) FetchScoreboard() (*ScoreboardData, error) {
 	return nil, nil
 }
 

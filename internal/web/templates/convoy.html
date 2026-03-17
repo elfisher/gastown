@@ -839,6 +839,61 @@
             </div>
             {{end}}
 
+            <!-- Scoreboard Panel -->
+            {{if .Scoreboard}}
+            <div class="panel" id="scoreboard-panel">
+                <div class="panel-header">
+                    <h2>📊 Scoreboard</h2>
+                    <span class="count">{{.Scoreboard.Total}}</span>
+                    <button class="collapse-btn" aria-label="Toggle panel">▼</button>
+                    <button class="expand-btn">Expand</button>
+                </div>
+                <div class="panel-body">
+                    <div class="scoreboard">
+                        <div class="scoreboard-bar">
+                            {{if .Scoreboard.DoneCount}}<div class="sb-done" style="width: {{.Scoreboard.DonePct}}%;" title="Done: {{.Scoreboard.DoneCount}}"></div>{{end}}
+                            {{if .Scoreboard.InProgCount}}<div class="sb-inprog" style="width: {{.Scoreboard.InProgPct}}%;" title="In Progress: {{.Scoreboard.InProgCount}}"></div>{{end}}
+                        </div>
+                        <div class="scoreboard-groups">
+                            <div class="sb-group sb-group-done">
+                                <div class="sb-group-header">
+                                    <span class="sb-icon">✅</span>
+                                    <span class="sb-label">Done</span>
+                                    <span class="sb-count">{{.Scoreboard.DoneCount}}</span>
+                                </div>
+                                <div class="sb-items">
+                                    {{range .Scoreboard.Done}}<span class="sb-item sb-item-done" title="{{.ID}}: {{.Title}}">{{.Title}}</span>{{end}}
+                                    {{if not .Scoreboard.Done}}<span class="sb-empty">—</span>{{end}}
+                                </div>
+                            </div>
+                            <div class="sb-group sb-group-inprog">
+                                <div class="sb-group-header">
+                                    <span class="sb-icon">🔨</span>
+                                    <span class="sb-label">In Progress</span>
+                                    <span class="sb-count">{{.Scoreboard.InProgCount}}</span>
+                                </div>
+                                <div class="sb-items">
+                                    {{range .Scoreboard.InProgress}}<span class="sb-item sb-item-inprog" title="{{.ID}}: {{.Title}}">{{.Title}}</span>{{end}}
+                                    {{if not .Scoreboard.InProgress}}<span class="sb-empty">—</span>{{end}}
+                                </div>
+                            </div>
+                            <div class="sb-group sb-group-open">
+                                <div class="sb-group-header">
+                                    <span class="sb-icon">⬜</span>
+                                    <span class="sb-label">Open</span>
+                                    <span class="sb-count">{{.Scoreboard.OpenCount}}</span>
+                                </div>
+                                <div class="sb-items">
+                                    {{range .Scoreboard.Open}}<span class="sb-item sb-item-open" title="{{.ID}}: {{.Title}}">{{.Title}}</span>{{end}}
+                                    {{if not .Scoreboard.Open}}<span class="sb-empty">—</span>{{end}}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+
             <!-- Work Panel (Combined Issues + Ready Work) -->
             <div class="panel" id="work-panel">
                 <div class="panel-header">

@@ -34,6 +34,7 @@ type ConvoyFetcher interface {
 	FetchHooks() ([]HookRow, error)
 	FetchMayor() (*MayorStatus, error)
 	FetchIssues() ([]IssueRow, error)
+	FetchScoreboard() (*ScoreboardData, error)
 	FetchActivity() ([]ActivityRow, error)
 }
 
@@ -84,11 +85,12 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mayor       *MayorStatus
 		issues      []IssueRow
 		activity    []ActivityRow
+		scoreboard  *ScoreboardData
 		wg          sync.WaitGroup
 	)
 
 	// Run all fetches in parallel with error logging
-	wg.Add(14)
+	wg.Add(15)
 
 	go func() {
 		defer wg.Done()
@@ -202,6 +204,14 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Printf("dashboard: FetchActivity failed: %v", err)
 		}
 	}()
+	go func() {
+		defer wg.Done()
+		var err error
+		scoreboard, err = h.fetcher.FetchScoreboard()
+		if err != nil {
+			log.Printf("dashboard: FetchScoreboard failed: %v", err)
+		}
+	}()
 
 	// Wait for fetches or timeout
 	done := make(chan struct{})
@@ -239,6 +249,7 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Issues:      enrichIssuesWithAssignees(issues, hooks),
 		Activity:    activity,
 		Summary:     summary,
+		Scoreboard:  scoreboard,
 		Expand:      expandPanel,
 		CSRFToken:   h.csrfToken,
 	}

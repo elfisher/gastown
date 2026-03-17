@@ -1,7 +1,7 @@
 import type { Convoy } from "../data/schemas.js";
 import { escapeHtml, statusBadge } from "./helpers.js";
 
-export function renderConvoyListPage(convoys: Convoy[]): string {
+export function renderConvoyListPage(convoys: Convoy[], showingAll = false): string {
   if (convoys.length === 0) {
     return `<div class="prose"><h1>Convoys</h1><p class="text-base-content/60">No convoys found.</p></div>`;
   }
@@ -19,6 +19,10 @@ export function renderConvoyListPage(convoys: Convoy[]): string {
     )
     .join("");
 
+  const loadAllButton = showingAll
+    ? ""
+    : `<button class="btn btn-ghost btn-sm mt-4" hx-get="/convoys?all=true" hx-target="body" hx-swap="innerHTML">Load all convoys (including closed)</button>`;
+
   return `
 <div class="prose max-w-none mb-6"><h1>Convoys</h1></div>
 <div class="overflow-x-auto">
@@ -28,5 +32,6 @@ export function renderConvoyListPage(convoys: Convoy[]): string {
     </thead>
     <tbody>${rows}</tbody>
   </table>
-</div>`;
+</div>
+${loadAllButton}`;
 }

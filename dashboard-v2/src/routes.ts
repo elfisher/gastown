@@ -94,11 +94,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.type("text/html").send(html);
   });
 
-  app.get("/convoys", async (_req, reply) => {
-    const convoys = await listConvoys();
+  app.get("/convoys", async (req, reply) => {
+    const all = (req.query as Record<string, string>).all === "true";
+    const convoys = await listConvoys(all);
     const html = await withLayout(
       "Convoys",
-      renderConvoyListPage(convoys),
+      renderConvoyListPage(convoys, all),
       "/convoys"
     );
     return reply.type("text/html").send(html);

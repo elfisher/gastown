@@ -2,10 +2,12 @@ import { exec } from "./exec.js";
 import { ConvoyListSchema, ConvoySchema, type Convoy } from "./schemas.js";
 import { getGtRoot } from "../config.js";
 
-export async function listConvoys(): Promise<Convoy[]> {
+export async function listConvoys(includeAll = false): Promise<Convoy[]> {
   const root = getGtRoot();
   try {
-    const { stdout } = await exec("gt", ["convoy", "list", "--json", "--all"], { cwd: root });
+    const args = ["convoy", "list", "--json"];
+    if (includeAll) args.push("--all");
+    const { stdout } = await exec("gt", args, { cwd: root });
     const parsed = JSON.parse(stdout);
     return ConvoyListSchema.parse(Array.isArray(parsed) ? parsed : []);
   } catch {

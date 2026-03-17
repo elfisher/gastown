@@ -10,6 +10,15 @@ const SYSTEM_ROLES = new Map<string, Agent["role"]>([
   ["boot", "boot"],
 ]);
 
+/** Seconds of inactivity before an agent is considered idle. */
+const IDLE_THRESHOLD_SEC = 600;
+
+/**
+ * If a session died within this window, treat it as "recovering" rather than
+ * "dead" — the witness/deacon will respawn it automatically.
+ */
+const RECOVERY_GRACE_SEC = 120;
+
 function parseSession(name: string): { rig: string; role: Agent["role"]; agentName: string } | null {
   const dash = name.indexOf("-");
   if (dash < 0) return null;
@@ -50,7 +59,6 @@ async function getHookedWork(target: string): Promise<string | undefined> {
       ["hook", "status", target, "--json"],
       { cwd: config.townRoot, timeoutMs: 5_000 }
     );
-    // stdout may contain non-JSON preamble (e.g. build warnings); extract JSON object
     const jsonStart = stdout.indexOf("{");
     if (jsonStart < 0) return undefined;
     const info = JSON.parse(stdout.slice(jsonStart));
@@ -62,6 +70,32 @@ async function getHookedWork(target: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+
+/**
+ * Get recently dead sessions from the feed to detect agents in recovery.
+ * Returns a set of session name prefixes that died within the grace window.
+ */
+async function getRecentDeaths(): Promise<Set<string>> {
+  const deaths = new Set<string>();
+  try {
+    const result = await exec(
+      "gt",
+      ["feed", "--plain", "--since", `${RECOVERY_GRACE_SEC}s`],
+      { timeoutMs: 5_000 }
+    );
+    for (const line of result.stdout.split("\n")) {
+      if (/session_death/.test(line)) {
+        // Extract session name: [HH:MM:SS] → <session>  session_death
+        const m = /→\s+([\w-]+)\s+session_death/.exec(line);
+        if (m?.[1]) deaths.add(m[1]);
+      }
+    }
+  } catch {
+    // Feed unavailable — don't block agent listing
+  }
+  return deaths;
 }
 
 export async function listAgents(): Promise<Agent[]> {
@@ -77,7 +111,8 @@ export async function listAgents(): Promise<Agent[]> {
     return [];
   }
 
-  const prefixMap = await loadPrefixToRigMap();
+const prefixMap = await loadPrefixToRigMap();
+  const recentDeaths = await getRecentDeaths();
 
   const agents: Agent[] = [];
   for (const line of stdout.split("\n")) {
@@ -90,7 +125,14 @@ export async function listAgents(): Promise<Agent[]> {
     const created = new Date(Number(createdStr) * 1000).toISOString();
     const activity = new Date(Number(activityStr) * 1000).toISOString();
     const ageSec = (Date.now() - Number(activityStr) * 1000) / 1000;
-    const status: Agent["status"] = ageSec > 600 ? "idle" : "working";
+
+    let status: Agent["status"];
+    if (ageSec > IDLE_THRESHOLD_SEC) {
+      // If the session recently died and is idle, it's recovering (not dead yet)
+      status = recentDeaths.has(session) ? "recovering" : "idle";
+    } else {
+      status = "working";
+    }
 
     agents.push({
       name: parsed.agentName,

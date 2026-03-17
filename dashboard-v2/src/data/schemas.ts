@@ -18,7 +18,7 @@ export const AgentSchema = z.object({
   rig: z.string(),
   role: z.enum(["mayor", "deacon", "witness", "refinery", "polecat", "crew", "boot"]),
   session: z.string(),
-  status: z.enum(["working", "idle", "dead"]),
+  status: z.enum(["working", "idle", "dead", "recovering"]),
   runtime: z.string().optional(),
   startedAt: z.string(),
   lastActivity: z.string(),

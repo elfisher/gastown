@@ -23,6 +23,7 @@ const STATUS_BADGE: Record<string, string> = {
   working: "badge-primary",
   idle: "badge-ghost",
   dead: "badge-error",
+  recovering: "badge-warning",
 };
 
 function elapsedTime(iso: string): string {

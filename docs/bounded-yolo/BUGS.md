@@ -2,6 +2,11 @@
 
 ## P2 — Improvements
 
+### TODO: Daemon JSON API for dashboard
+- **Symptom:** Dashboard page loads are slow (1-2s) because every page shells out to multiple CLI commands (`gt rig list`, `bd list`, `tmux capture-pane`). Each is a cold Go binary invocation hitting Dolt.
+- **Fix:** The daemon already has all the state in memory (rigs, agents, polecats, session health). Expose a lightweight JSON API from the daemon (e.g., `localhost:8082/api/status`) that the dashboard reads instead of shelling out. One HTTP call vs N process spawns.
+- **Interim:** Cache CLI output in the dashboard's Fastify server with a short TTL (5-10s). htmx polling refreshes it.
+
 ### TODO: Session rotation for long-running agents
 - **Scope:** System agents that run for hours/days.
 - **Approach:** `gt handoff` to fresh session periodically, preserving state via mail/hooks.

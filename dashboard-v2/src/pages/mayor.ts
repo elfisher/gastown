@@ -57,8 +57,15 @@ export function renderMayorPage(messages: MayorMessage[]): string {
          class="flex-1 overflow-y-auto space-y-1 p-4 bg-base-200 rounded-box"
          hx-get="/api/mayor/messages"
          hx-trigger="every 5s"
-         hx-swap="innerHTML">
+         hx-swap="innerHTML scroll:bottom"
+         hx-on::after-settle="this.scrollTop = this.scrollHeight">
       ${renderMessages(messages)}
+    </div>
+
+    <div id="sent-toast" class="hidden toast toast-end toast-bottom z-50">
+      <div class="alert alert-success py-2 px-4">
+        <span>✓ Sent</span>
+      </div>
     </div>
 
     <form class="mt-4 flex gap-2"
@@ -72,5 +79,22 @@ export function renderMayorPage(messages: MayorMessage[]): string {
              autocomplete="off" />
       <button type="submit" class="btn btn-primary">Send</button>
     </form>
+
+    <script>
+      document.body.addEventListener("mayor-sent", function() {
+        var t = document.getElementById("sent-toast");
+        if (t) {
+          t.classList.remove("hidden");
+          setTimeout(function() { t.classList.add("hidden"); }, 2000);
+        }
+      });
+      // Auto-scroll on htmx content swap
+      document.body.addEventListener("htmx:afterSettle", function(e) {
+        var el = document.getElementById("mayor-messages");
+        if (el && el.contains(e.detail.elt)) {
+          el.scrollTop = el.scrollHeight;
+        }
+      });
+    </script>
   </div>`;
 }

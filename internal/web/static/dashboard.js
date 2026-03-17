@@ -2992,6 +2992,7 @@
     // ============================================
     var sessionPreviewInterval = null;
     var sessionsTable = null; // will be set when opening preview
+    var sessionPreviewUserScrolled = false; // true when user has scrolled up
 
     // Click on session row to preview terminal output
     document.addEventListener('click', function(e) {
@@ -3007,6 +3008,7 @@
 
     function openSessionPreview(sessionName) {
         window.pauseRefresh = true;
+        sessionPreviewUserScrolled = false;
 
         var preview = document.getElementById('session-preview');
         var nameEl = document.getElementById('session-preview-name');
@@ -3014,6 +3016,12 @@
         var statusEl = document.getElementById('session-preview-status');
 
         if (!preview || !contentEl) return;
+
+        // Track user scroll: if user scrolls away from bottom, stop auto-scrolling
+        contentEl.onscroll = function() {
+            var atBottom = contentEl.scrollHeight - contentEl.scrollTop - contentEl.clientHeight < 40;
+            sessionPreviewUserScrolled = !atBottom;
+        };
 
         // Hide the sessions table, show preview
         sessionsTable = preview.parentNode.querySelector('table');
@@ -3045,8 +3053,10 @@
                     return;
                 }
                 contentEl.textContent = data.content || '(empty)';
-                // Auto-scroll to bottom
-                contentEl.scrollTop = contentEl.scrollHeight;
+                // Auto-scroll to bottom unless user scrolled up
+                if (!sessionPreviewUserScrolled) {
+                    contentEl.scrollTop = contentEl.scrollHeight;
+                }
                 // Show refresh timestamp
                 var now = new Date();
                 var timeStr = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes() + ':' + (now.getSeconds() < 10 ? '0' : '') + now.getSeconds();
@@ -3062,9 +3072,12 @@
             clearInterval(sessionPreviewInterval);
             sessionPreviewInterval = null;
         }
+        sessionPreviewUserScrolled = false;
 
         var preview = document.getElementById('session-preview');
         if (preview) preview.style.display = 'none';
+        var contentEl = document.getElementById('session-preview-content');
+        if (contentEl) contentEl.onscroll = null;
 
         // Show the sessions table again
         if (sessionsTable) sessionsTable.style.display = '';

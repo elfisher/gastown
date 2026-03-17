@@ -93,17 +93,6 @@ export const ConvoySchema = z.object({
 export type Convoy = z.infer<typeof ConvoySchema>;
 export const ConvoyListSchema = z.array(ConvoySchema);
 
-// --- Agent ---
-export const AgentSchema = z.object({
-  name: z.string(),
-  rig: z.string().optional(),
-  role: z.string(),
-  status: z.string().optional(),
-  session_id: z.string().optional(),
-});
-export type Agent = z.infer<typeof AgentSchema>;
-export const AgentListSchema = z.array(AgentSchema);
-
 // --- Event (from gt feed --plain) ---
 export const EventSchema = z.object({
   timestamp: z.string(),

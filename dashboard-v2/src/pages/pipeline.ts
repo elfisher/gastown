@@ -38,7 +38,7 @@ function renderBeadCard(bead: Bead): string {
     ? escapeHtml(bead.assignee.split("/").pop() ?? bead.assignee)
     : "unassigned";
 
-  return `<div class="card bg-base-100 shadow-sm border border-base-300">
+  return `<div class="card bg-base-100 shadow-sm border border-base-300 bead-card" data-search="${escapeHtml((bead.id + " " + bead.title).toLowerCase())}">
     <div class="card-body p-3 gap-1">
       <div class="flex items-center justify-between">
         <a href="/bead/${encodeURIComponent(bead.id)}" class="link link-hover text-sm font-mono">${escapeHtml(bead.id)}</a>
@@ -61,9 +61,10 @@ function renderStage(stage: StageGroup): string {
     stage.beads.length === 0
       ? `<div class="text-center text-base-content/40 py-4 text-sm">No work items</div>`
       : stage.beads.map(renderBeadCard).join("\n");
+  const expanded = stage.name !== "closed";
 
   return `<div class="collapse collapse-arrow bg-base-200 rounded-box">
-    <input type="checkbox" checked />
+    <input type="checkbox" ${expanded ? "checked" : ""} />
     <div class="collapse-title font-medium flex items-center gap-2">
       ${icon} ${escapeHtml(stage.name.charAt(0).toUpperCase() + stage.name.slice(1))}
       <span class="badge badge-sm">${stage.beads.length}</span>
@@ -94,6 +95,8 @@ function renderFilterBar(
     .join("");
 
   return `<div class="flex gap-2 flex-wrap">
+    <input type="text" placeholder="Search beads…" class="input input-bordered input-sm w-48"
+           oninput="(function(v){document.querySelectorAll('.bead-card').forEach(function(c){c.style.display=c.dataset.search.includes(v)?'':'none'})})(this.value.toLowerCase())" />
     <select name="rig" class="select select-bordered select-sm"
             hx-get="/api/pipeline" hx-target="#pipeline-content" hx-swap="innerHTML"
             hx-include="[name='priority']">

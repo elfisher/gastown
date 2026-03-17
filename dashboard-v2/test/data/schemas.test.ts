@@ -74,7 +74,15 @@ describe("ConvoySchema", () => {
 
 describe("AgentSchema", () => {
   it("validates agent", () => {
-    const agent = { name: "slit", role: "polecat", rig: "gastown" };
+    const agent = {
+      name: "slit",
+      rig: "gastown",
+      role: "polecat" as const,
+      session: "gastown-slit",
+      status: "working" as const,
+      startedAt: "2026-03-13T00:00:00Z",
+      lastActivity: "2026-03-13T01:00:00Z",
+    };
     expect(AgentSchema.parse(agent)).toEqual(agent);
   });
 });

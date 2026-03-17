@@ -1,5 +1,5 @@
 import { getConvoy } from "../data/convoys.js";
-import { listBeads } from "../data/beads.js";
+import { listBeads, getBead } from "../data/beads.js";
 import { escapeHtml, statusBadge, statusColor, priorityLabel } from "./helpers.js";
 import { linkify } from "./linkify.js";
 import type { Bead, BeadDep } from "../data/schemas.js";
@@ -41,12 +41,19 @@ export async function renderConvoyPage(id: string): Promise<string> {
     priority: b.priority,
   }));
 
-  // Build edges from dependency_count hints — we need bd show for real deps
-  // For now, build edges from the bead list order (deps are in issueIds order)
+  // Build edges from bead dependency data
   const edges: DagEdge[] = [];
   const idSet = new Set(issueIds);
-  for (const b of convoyBeads) {
-    // If bead has dependency info, we'd use it. For now, edges come from client-side fetch.
+  const depResults = await Promise.all(
+    convoyBeads.map((b) => getBead(b.id).catch(() => null))
+  );
+  for (const detail of depResults) {
+    if (!detail?.dependencies) continue;
+    for (const dep of detail.dependencies) {
+      if (idSet.has(dep.id)) {
+        edges.push({ source: dep.id, target: detail.id });
+      }
+    }
   }
 
   const beadRows = convoyBeads.length > 0

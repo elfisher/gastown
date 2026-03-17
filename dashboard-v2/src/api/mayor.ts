@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { getMayorMessages, nudgeMayor } from "../data/mayor.js";
+import { getMayorMessages, nudgeMayor, addSentMessage } from "../data/mayor.js";
 import { renderMessages } from "../pages/mayor.js";
 
 export async function registerMayorApi(app: FastifyInstance): Promise<void> {
@@ -18,8 +18,13 @@ export async function registerMayorApi(app: FastifyInstance): Promise<void> {
       if (typeof message !== "string" || message.trim() === "") {
         return reply.status(400).send({ error: "message is required" });
       }
-      await nudgeMayor(message.trim());
-      return reply.status(200).send({ ok: true });
+      const trimmed = message.trim();
+      addSentMessage(trimmed);
+      await nudgeMayor(trimmed);
+      return reply
+        .status(200)
+        .header("HX-Trigger", "mayor-sent")
+        .send({ ok: true });
     }
   );
 }

@@ -9,8 +9,10 @@ export function renderLayout(
 ): string {
   const navItems = [
     { href: "/", label: "Pipeline", icon: "📊" },
+    { href: "/convoys", label: "Convoys", icon: "🚚" },
     { href: "/agents", label: "Agents", icon: "🤖" },
     { href: "/mayor", label: "Mayor", icon: "🎩" },
+    { href: "/overview", label: "Project Overview", icon: "📋" },
     { href: "/tour", label: "Tour", icon: "🗺️" },
   ];
 
@@ -46,9 +48,9 @@ export function renderLayout(
       </div>
       ${content}
     </div>
-    <div class="drawer-side">
-      <label for="drawer-toggle" aria-label="close sidebar" class="drawer-overlay"></label>
-      <div class="menu bg-base-200 text-base-content min-h-full w-64 p-4">
+    <div class="drawer-side z-40">
+      <label for="drawer-toggle" aria-label="close sidebar" class="drawer-overlay lg:hidden"></label>
+      <div class="menu bg-base-200 text-base-content min-h-full w-64 p-4 relative z-50">
         <div class="text-xl font-bold mb-4 px-2">⛽ Gas Town</div>
         <ul class="menu-sm">
           ${navItems

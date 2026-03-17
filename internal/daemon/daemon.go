@@ -728,6 +728,11 @@ func (d *Daemon) heartbeat(state *State) {
 	// branches persist indefinitely. This cleans them up periodically.
 	d.pruneStaleBranches()
 
+	// 13b. Post-merge consistency: push locally-merged-but-not-pushed branches.
+	// If the refinery session dies between git merge and git push, the local
+	// branch has the merge but the remote doesn't. This catches that case.
+	d.pushUnpushedMerges()
+
 	// 14. Dispatch scheduled work (capacity-controlled polecat dispatch).
 	// Shells out to `gt scheduler run` to avoid circular import between daemon and cmd.
 	// Pressure-gated: polecats are the primary resource consumers.
@@ -2331,6 +2336,55 @@ func (d *Daemon) cleanupOrphanedProcesses() {
 
 // pruneStaleBranches removes stale local polecat tracking branches from all rig clones.
 // This runs in every heartbeat but is very fast when there are no stale branches.
+// pushUnpushedMerges checks each rig for locally-merged-but-not-pushed commits
+// on the working branch. If the refinery session died between git merge and
+// git push, the local branch has the merge but the remote doesn't. This pushes
+// any unpushed commits to recover from that failure mode.
+func (d *Daemon) pushUnpushedMerges() {
+	rigs := d.getKnownRigs()
+	for _, rigName := range rigs {
+		rigDir := filepath.Join(d.config.TownRoot, rigName)
+		repoGit := filepath.Join(rigDir, ".repo.git")
+		if _, err := os.Stat(repoGit); os.IsNotExist(err) {
+			continue
+		}
+
+		// Determine the working branch for this rig
+		r := &rig.Rig{Name: rigName, Path: rigDir}
+		branch := r.WorkingBranch()
+
+		// Get local branch HEAD
+		localCmd := exec.Command("git", "--git-dir", repoGit, "rev-parse", branch)
+		localOut, err := localCmd.Output()
+		if err != nil {
+			continue // Branch doesn't exist locally
+		}
+		localHEAD := strings.TrimSpace(string(localOut))
+
+		// Get remote branch HEAD via ls-remote (doesn't require fetch)
+		remoteCmd := exec.Command("git", "--git-dir", repoGit, "ls-remote", "origin", "refs/heads/"+branch)
+		remoteOut, err := remoteCmd.Output()
+		if err != nil || len(strings.TrimSpace(string(remoteOut))) == 0 {
+			continue // Remote branch doesn't exist or unreachable
+		}
+		remoteHEAD := strings.Fields(strings.TrimSpace(string(remoteOut)))[0]
+
+		if localHEAD == remoteHEAD {
+			continue // In sync
+		}
+
+		d.logger.Printf("MERGE_CONSISTENCY: rig %s has unpushed commit(s) on %s (local=%s, remote=%s), pushing",
+			rigName, branch, localHEAD[:8], remoteHEAD[:8])
+
+		pushCmd := exec.Command("git", "--git-dir", repoGit, "push", "origin", branch)
+		if pushOutput, err := pushCmd.CombinedOutput(); err != nil {
+			d.logger.Printf("Warning: failed to push unpushed merges for %s: %s: %v", rigName, strings.TrimSpace(string(pushOutput)), err)
+		} else {
+			d.logger.Printf("MERGE_CONSISTENCY: pushed to origin/%s for rig %s", branch, rigName)
+		}
+	}
+}
+
 func (d *Daemon) pruneStaleBranches() {
 	// pruneInDir prunes stale polecat branches in a single git directory.
 	pruneInDir := func(dir, label string) {

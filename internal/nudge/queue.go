@@ -77,6 +77,37 @@ func queueDir(townRoot, session string) string {
 
 // randomSuffix returns a short random hex string to disambiguate filenames
 // when multiple processes enqueue within the same nanosecond.
+// dedupWindow is the time window within which identical nudges are collapsed.
+const dedupWindow = 30 * time.Second
+
+// isDuplicate checks if a nudge with the same Message and Sender already
+// exists in the queue within the dedup window.
+func isDuplicate(dir string, nudge QueuedNudge) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var existing QueuedNudge
+		if err := json.Unmarshal(data, &existing); err != nil {
+			continue
+		}
+		if existing.Message == nudge.Message && existing.Sender == nudge.Sender {
+			if nudge.Timestamp.Sub(existing.Timestamp) < dedupWindow {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func randomSuffix() string {
 	var b [4]byte
 	_, _ = rand.Read(b[:])
@@ -101,6 +132,13 @@ func Enqueue(townRoot, session string, nudge QueuedNudge) error {
 
 	if nudge.Timestamp.IsZero() {
 		nudge.Timestamp = time.Now()
+	}
+
+	// Dedup: skip if an identical message from the same sender is already
+	// queued within the dedup window. Prevents nudge spam when multiple
+	// polecats finish simultaneously and each triggers GE_READY events.
+	if isDuplicate(dir, nudge) {
+		return nil
 	}
 	if nudge.Priority == "" {
 		nudge.Priority = PriorityNormal

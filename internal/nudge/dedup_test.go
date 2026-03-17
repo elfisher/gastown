@@ -5,18 +5,12 @@ import (
 	"time"
 )
 
-// TestEnqueue_DuplicateEventsNotThrottled is a NEGATIVE test proving that
-// the nudge queue does not deduplicate identical events enqueued in rapid
-// succession. Multiple GE_READY events from polecats finishing simultaneously
-// all get enqueued, flooding the refinery's pane.
-//
-// EXPECTED AFTER FIX: identical events within a short window are collapsed
-// into one. Queue length should be 1, not 5.
-func TestEnqueue_DuplicateEventsNotThrottled(t *testing.T) {
+// TestEnqueue_DeduplicatesIdenticalMessages verifies that identical nudges
+// enqueued within the dedup window are collapsed into one.
+func TestEnqueue_DeduplicatesIdenticalMessages(t *testing.T) {
 	townRoot := t.TempDir()
 	session := "gt-refinery"
 
-	// Enqueue 5 identical GE_READY nudges within 1 second
 	for i := 0; i < 5; i++ {
 		err := Enqueue(townRoot, session, QueuedNudge{
 			Message:   "GE_READY: Merge request ready for processing",
@@ -33,13 +27,75 @@ func TestEnqueue_DuplicateEventsNotThrottled(t *testing.T) {
 		t.Fatalf("checking pending: %v", err)
 	}
 
-	// NEGATIVE: all 5 are enqueued — no deduplication
-	if pending != 5 {
-		t.Errorf("expected 5 pending nudges (no dedup), got %d", pending)
+	if pending != 1 {
+		t.Errorf("expected 1 pending nudge (duplicates collapsed), got %d", pending)
+	}
+}
+
+// TestEnqueue_AllowsDifferentMessages is a guard test verifying that
+// dedup only collapses identical messages, not different ones.
+func TestEnqueue_AllowsDifferentMessages(t *testing.T) {
+	townRoot := t.TempDir()
+	session := "gt-refinery"
+
+	messages := []string{
+		"GE_READY: MR from polecat-1",
+		"GE_READY: MR from polecat-2",
+		"PATROL: check status",
+	}
+	for _, msg := range messages {
+		err := Enqueue(townRoot, session, QueuedNudge{
+			Message:   msg,
+			Sender:    "polecat",
+			Timestamp: time.Now(),
+		})
+		if err != nil {
+			t.Fatalf("enqueue %q failed: %v", msg, err)
+		}
 	}
 
-	// After fix:
-	// if pending != 1 {
-	//     t.Errorf("expected 1 pending nudge (duplicates collapsed), got %d", pending)
-	// }
+	pending, err := Pending(townRoot, session)
+	if err != nil {
+		t.Fatalf("checking pending: %v", err)
+	}
+
+	if pending != 3 {
+		t.Errorf("expected 3 pending nudges (different messages), got %d", pending)
+	}
+}
+
+// TestEnqueue_AllowsSameMessageAfterWindow is a guard test verifying that
+// the same message can be enqueued again after the dedup window expires.
+func TestEnqueue_AllowsSameMessageAfterWindow(t *testing.T) {
+	townRoot := t.TempDir()
+	session := "gt-refinery"
+
+	// First enqueue
+	err := Enqueue(townRoot, session, QueuedNudge{
+		Message:   "GE_READY: Merge request ready",
+		Sender:    "polecat",
+		Timestamp: time.Now().Add(-dedupWindow - time.Second), // outside window
+	})
+	if err != nil {
+		t.Fatalf("first enqueue failed: %v", err)
+	}
+
+	// Second enqueue — same message but after the window
+	err = Enqueue(townRoot, session, QueuedNudge{
+		Message:   "GE_READY: Merge request ready",
+		Sender:    "polecat",
+		Timestamp: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("second enqueue failed: %v", err)
+	}
+
+	pending, err := Pending(townRoot, session)
+	if err != nil {
+		t.Fatalf("checking pending: %v", err)
+	}
+
+	if pending != 2 {
+		t.Errorf("expected 2 pending nudges (outside dedup window), got %d", pending)
+	}
 }

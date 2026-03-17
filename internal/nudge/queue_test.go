@@ -1,6 +1,7 @@
 package nudge
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -334,7 +335,7 @@ func TestEnqueueQueueDepthLimit(t *testing.T) {
 	for i := 0; i < MaxQueueDepth; i++ {
 		n := QueuedNudge{
 			Sender:  "sender",
-			Message: "msg",
+			Message: fmt.Sprintf("msg-%d", i),
 		}
 		if err := Enqueue(townRoot, session, n); err != nil {
 			t.Fatalf("Enqueue %d: %v", i, err)

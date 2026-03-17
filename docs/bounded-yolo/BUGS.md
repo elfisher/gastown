@@ -40,6 +40,35 @@
 - **Parsing:** Read context `%` from Kiro prompt line (e.g., `8% !>`) via tmux capture-pane
 - **Frequency:** Check after every patrol cycle or every N minutes
 
+## P0 — Merge Pipeline Data Loss
+
+### BUG: Refinery merge-push is not atomic — silent code loss
+- **Symptom:** Four polecats finished dashboard phases, submitted to merge queue. Refinery rebased all 4 MRs successfully, but the final `git push` never executed (session got stuck in vim from nudge event spam). MRs were marked as processed, beads were closed, but code only existed on a local detached commit. Overnight, polecats respawned to redo already-completed work.
+- **Root cause:** The refinery marks MRs as processed before the push succeeds. If anything fails after that point (session dies, vim trap, restart), the MR is consumed but code never lands on any remote branch. No rollback, no retry.
+- **Impact:** Silent data loss. The system reports success while code is lost. Polecats redo work, creating duplicates and wasting cycles. This is the most dangerous bug class — invisible failure.
+- **Fix:** Don't mark an MR as processed until the push succeeds. If the push fails, leave the MR in the queue with a "push-pending" status so the next patrol retries it. On session restart, the refinery should check for locally-merged-but-not-pushed commits and push them before processing new MRs.
+
+### BUG: Polecats and refinery default to main instead of working branch
+- **Symptom:** All polecats branched from and merged into `main`. The dashboard work should have targeted `dashboard-v2`. Had to manually force-push merged commits to the correct branch after the fact.
+- **Root cause:** GT defaults everything to the rig's `default_branch` (main). There's no concept of a working branch. The `--base-branch` flag exists per-sling but: (a) nobody remembers to pass it every time, (b) the merge queue records `main` as the target regardless, (c) the refinery reads the target from the MR, so it pushes to `main` no matter what.
+- **Impact:** Code lands on the wrong branch. For fork workflows, pushing to `main` is wrong — `main` should stay synced with upstream. All work should go to the feature/working branch.
+- **Fix:** Add a `base_branch` field to the rig's `config.json`. When set:
+  - Polecats branch from `base_branch` by default (not `default_branch`)
+  - MRs record `base_branch` as the target
+  - Refinery pushes to `origin/<base_branch>`
+  - `gt sling` reads this automatically — no `--base-branch` needed
+  - Falls back to `default_branch` if `base_branch` is not set
+  - The working branch is the default, not the exception
+
+### BUG: Nudge event spam corrupts refinery session
+- **Symptom:** During merge processing, the refinery's tmux pane got flooded with repeated GE_READY nudge events. This corrupted its output and caused it to land in a vim session (git merge commit editor), stalling the merge pipeline.
+- **Root cause:** Multiple polecats finishing near-simultaneously each trigger GE_READY events. No deduplication or throttling.
+- **Fix:** Deduplicate or throttle nudge events. Multiple identical events within a short window should be collapsed into one. The nudge queue already exists — add a "last event type + timestamp" check before enqueuing.
+
+### TODO: Post-merge consistency check (daemon safety net)
+- **Symptom:** Beads marked as closed but target branch doesn't contain the expected commits. System believes work is done when it isn't.
+- **Fix:** Daemon heartbeat check: for recently-closed beads, verify the target branch actually contains the merge commit. If not, flag as inconsistency and either retry the push or alert the overseer. Same pattern as pane inspection — the daemon is the safety net.
+
 ## P1 — Reliability
 
 ### TODO: Mayor shouldn't poll in a while loop

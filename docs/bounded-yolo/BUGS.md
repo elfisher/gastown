@@ -82,6 +82,39 @@ These test that the daemon detects sessions with no pane changes across heartbea
 
 ## Architecture Note: Why Existing Daemon Checks Don't Catch Our Bugs
 
+### Test Plan: Merge Pipeline (P0)
+
+**Test 11: `TestRefinery_MRMarkedBeforePush`** (negative)
+- Setup: mock refinery ProcessResult where push fails after MR is marked processed
+- Current behavior: MR is consumed, code never pushed, no retry
+- Assert: MR status is "processed" even though push failed (proving the gap)
+- After fix: assert MR stays in queue with "push-pending" status when push fails
+
+**Test 12: `TestSling_DefaultsToMainNotWorkingBranch`** (negative)
+- Setup: rig config has `default_branch: "main"`, no `base_branch` set
+- Current behavior: sling targets main
+- Assert: resolved target branch is "main" (proving the gap)
+- After fix: assert sling reads `base_branch` from rig config when set
+
+**Test 13: `TestSling_RespectsBaseBranch`** (positive)
+- Setup: rig config has `base_branch: "dashboard-v2"`
+- Assert: resolved target branch is "dashboard-v2"
+- Guard test — should pass after fix
+
+**Test 14: `TestNudgeQueue_DuplicateEventsNotThrottled`** (negative)
+- Setup: enqueue 5 identical GE_READY events within 1 second
+- Current behavior: all 5 are enqueued
+- Assert: queue length is 5 (proving no deduplication)
+- After fix: assert queue length is 1 (duplicates collapsed)
+
+**Test 15: `TestDaemon_PostMergeConsistencyCheck`** (negative)
+- Setup: bead marked closed with merge_commit set, but target branch doesn't contain that commit
+- Current behavior: no detection
+- Assert: no inconsistency flagged
+- After fix: assert MERGE_INCONSISTENCY logged
+
+## Architecture Note: Why Existing Daemon Checks Don't Catch Our Bugs
+
 The daemon heartbeat already has sophisticated health checking. Here's what it does and where the gaps are:
 
 ### What the daemon already checks (every 3 minutes)

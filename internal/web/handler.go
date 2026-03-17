@@ -92,7 +92,7 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Run all fetches in parallel with error logging
-	wg.Add(15)
+	wg.Add(16)
 
 	go func() {
 		defer wg.Done()

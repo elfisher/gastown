@@ -20,6 +20,7 @@ var errFetchFailed = errors.New("fetch failed")
 type MockConvoyFetcher struct {
 	Convoys     []ConvoyRow
 	MergeQueue  []MergeQueueRow
+	Pipeline    []PipelineRow
 	Workers     []WorkerRow
 	Mail        []MailRow
 	Rigs        []RigRow
@@ -41,6 +42,10 @@ func (m *MockConvoyFetcher) FetchConvoys() ([]ConvoyRow, error) {
 
 func (m *MockConvoyFetcher) FetchMergeQueue() ([]MergeQueueRow, error) {
 	return m.MergeQueue, nil
+}
+
+func (m *MockConvoyFetcher) FetchPipeline() ([]PipelineRow, error) {
+	return m.Pipeline, nil
 }
 
 func (m *MockConvoyFetcher) FetchWorkers() ([]WorkerRow, error) {
@@ -1014,6 +1019,10 @@ func (m *MockConvoyFetcherWithErrors) FetchConvoys() ([]ConvoyRow, error) {
 
 func (m *MockConvoyFetcherWithErrors) FetchMergeQueue() ([]MergeQueueRow, error) {
 	return nil, m.MergeQueueError
+}
+
+func (m *MockConvoyFetcherWithErrors) FetchPipeline() ([]PipelineRow, error) {
+	return nil, nil
 }
 
 func (m *MockConvoyFetcherWithErrors) FetchWorkers() ([]WorkerRow, error) {

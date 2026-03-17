@@ -1099,6 +1099,70 @@
         .mq-yellow { background: rgba(255, 180, 84, 0.08); }
         .mq-red { background: rgba(240, 113, 120, 0.08); }
 
+        /* Pipeline progress styles */
+        .pipeline-progress {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .pipeline-heading {
+            font-size: 0.85em;
+            color: var(--text-muted);
+            margin: 0 0 8px 0;
+            font-weight: normal;
+        }
+        .pipeline-items {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .pipeline-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .pipeline-pos {
+            color: var(--text-muted);
+            min-width: 60px;
+            font-variant-numeric: tabular-nums;
+        }
+        .pipeline-phase {
+            min-width: 70px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8em;
+        }
+        .pipeline-branch {
+            color: var(--cyan);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 200px;
+        }
+        .pipeline-target {
+            color: var(--text-muted);
+        }
+        .pipeline-worker {
+            color: var(--text-muted);
+            font-size: 0.85em;
+        }
+        .pipeline-age {
+            color: var(--text-muted);
+            margin-left: auto;
+            font-size: 0.85em;
+        }
+        .pipeline-ready .pipeline-phase { color: var(--yellow); }
+        .pipeline-preparing .pipeline-phase { color: var(--cyan); }
+        .pipeline-merging .pipeline-phase { color: var(--blue); }
+        .pipeline-merged .pipeline-phase { color: var(--green); }
+        .pipeline-failed .pipeline-phase { color: var(--red); }
+        .pipeline-preparing { background: rgba(137, 221, 255, 0.06); }
+        .pipeline-merging { background: rgba(130, 170, 255, 0.08); }
+
         /* Severity styles */
         .severity-critical { color: var(--red); font-weight: bold; }
         .severity-high { color: var(--orange); }

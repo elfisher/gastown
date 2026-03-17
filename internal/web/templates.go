@@ -17,6 +17,7 @@ var templateFS embed.FS
 type ConvoyData struct {
 	Convoys     []ConvoyRow
 	MergeQueue  []MergeQueueRow
+	Pipeline    []PipelineRow
 	Workers     []WorkerRow
 	Mail        []MailRow
 	Rigs        []RigRow
@@ -216,6 +217,19 @@ type MergeQueueRow struct {
 	ColorClass string // "mq-green", "mq-yellow", "mq-red"
 }
 
+// PipelineRow represents an MR being processed by the refinery.
+type PipelineRow struct {
+	ID       string // MR bead ID
+	Branch   string // Source branch
+	Target   string // Target branch
+	Worker   string // Polecat that submitted
+	Rig      string // Rig name
+	Phase    string // ready, claimed, preparing, merging, merged, rejected, failed
+	Age      string // Time since created
+	Position int    // 1-based position in queue
+	Total    int    // Total MRs in pipeline for this rig
+}
+
 // ConvoyRow represents a single convoy in the dashboard.
 type ConvoyRow struct {
 	ID            string
@@ -253,7 +267,8 @@ func LoadTemplates() (*template.Template, error) {
 		"dogStateClass":      dogStateClass,
 		"queueStatusClass":   queueStatusClass,
 		"polecatStatusClass": polecatStatusClass,
-		"activityTypeClass": activityTypeClass,
+		"activityTypeClass":  activityTypeClass,
+		"pipelinePhaseClass": pipelinePhaseClass,
 		"contains": func(s, substr string) bool {
 			return strings.Contains(s, substr)
 		},
@@ -413,5 +428,21 @@ func activityTypeClass(category string) string {
 		return "tl-cat-system"
 	default:
 		return "tl-cat-default"
+	}
+}
+
+// pipelinePhaseClass returns CSS class for a pipeline MR phase.
+func pipelinePhaseClass(phase string) string {
+	switch phase {
+	case "preparing":
+		return "pipeline-preparing"
+	case "merging":
+		return "pipeline-merging"
+	case "merged":
+		return "pipeline-merged"
+	case "rejected", "failed":
+		return "pipeline-failed"
+	default:
+		return "pipeline-ready"
 	}
 }

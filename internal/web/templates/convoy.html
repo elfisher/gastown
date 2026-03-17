@@ -577,6 +577,24 @@
                     <button class="expand-btn">Expand</button>
                 </div>
                 <div class="panel-body">
+                    <!-- Pipeline Progress View -->
+                    {{if .Pipeline}}
+                    <div class="pipeline-progress">
+                        <h3 class="pipeline-heading">⚙️ Refinery Pipeline</h3>
+                        <div class="pipeline-items">
+                            {{range .Pipeline}}
+                            <div class="pipeline-item {{pipelinePhaseClass .Phase}}">
+                                <span class="pipeline-pos">MR {{.Position}}/{{.Total}}</span>
+                                <span class="pipeline-phase">{{.Phase}}</span>
+                                <span class="pipeline-branch" title="{{.Branch}}">{{.Branch}}</span>
+                                <span class="pipeline-target">→ {{.Target}}</span>
+                                {{if .Worker}}<span class="pipeline-worker">{{.Worker}}</span>{{end}}
+                                <span class="pipeline-age">{{.Age}}</span>
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+                    {{end}}
                     <!-- PR List View -->
                     <div id="pr-list">
                         {{if .MergeQueue}}

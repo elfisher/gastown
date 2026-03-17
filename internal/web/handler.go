@@ -23,6 +23,7 @@ var staticFiles embed.FS
 type ConvoyFetcher interface {
 	FetchConvoys() ([]ConvoyRow, error)
 	FetchMergeQueue() ([]MergeQueueRow, error)
+	FetchPipeline() ([]PipelineRow, error)
 	FetchWorkers() ([]WorkerRow, error)
 	FetchMail() ([]MailRow, error)
 	FetchRigs() ([]RigRow, error)
@@ -73,6 +74,7 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var (
 		convoys     []ConvoyRow
 		mergeQueue  []MergeQueueRow
+		pipeline    []PipelineRow
 		workers     []WorkerRow
 		mail        []MailRow
 		rigs        []RigRow
@@ -106,6 +108,14 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mergeQueue, err = h.fetcher.FetchMergeQueue()
 		if err != nil {
 			log.Printf("dashboard: FetchMergeQueue failed: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		var err error
+		pipeline, err = h.fetcher.FetchPipeline()
+		if err != nil {
+			log.Printf("dashboard: FetchPipeline failed: %v", err)
 		}
 	}()
 	go func() {
@@ -236,6 +246,7 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	data := ConvoyData{
 		Convoys:     convoys,
 		MergeQueue:  mergeQueue,
+		Pipeline:    pipeline,
 		Workers:     workers,
 		Mail:        mail,
 		Rigs:        rigs,

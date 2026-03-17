@@ -706,6 +706,99 @@ func determineColorClass(ciStatus, mergeable string) string {
 	return "mq-yellow"
 }
 
+// FetchPipeline fetches internal merge queue MRs with their processing phase.
+// This shows what the refinery is actively working on, unlike FetchMergeQueue
+// which shows GitHub PRs.
+func (f *LiveConvoyFetcher) FetchPipeline() ([]PipelineRow, error) {
+	// Load registered rigs
+	rigsConfigPath := filepath.Join(f.townRoot, "mayor", "rigs.json")
+	rigsConfig, err := config.LoadRigsConfig(rigsConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("loading rigs config: %w", err)
+	}
+
+	var result []PipelineRow
+
+	for rigName := range rigsConfig.Rigs {
+		rigBeadsDir := filepath.Join(f.townRoot, rigName)
+
+		// Query open MR beads for this rig
+		stdout, err := f.runBdCmd(rigBeadsDir, "list", "--label=gt:merge-request", "--status=open", "--json", "--limit=20")
+		if err != nil {
+			continue // Rig may not have beads or MRs
+		}
+
+		var mrs []struct {
+			ID          string `json:"id"`
+			Title       string `json:"title"`
+			Status      string `json:"status"`
+			Description string `json:"description"`
+			CreatedAt   string `json:"created_at"`
+			UpdatedAt   string `json:"updated_at"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &mrs); err != nil {
+			continue
+		}
+
+		total := len(mrs)
+		for i, mr := range mrs {
+			row := PipelineRow{
+				ID:       mr.ID,
+				Rig:      rigName,
+				Position: i + 1,
+				Total:    total,
+			}
+
+			// Parse MR fields from description
+			row.Branch, row.Target, row.Worker = parseMRDescriptionFields(mr.Description)
+
+			// Derive phase from status
+			switch mr.Status {
+			case "in_progress":
+				row.Phase = "preparing"
+			default:
+				row.Phase = "ready"
+			}
+
+			// Calculate age
+			if mr.CreatedAt != "" {
+				if t, err := time.Parse(time.RFC3339, mr.CreatedAt); err == nil {
+					row.Age = formatTimestamp(t)
+				}
+			}
+
+			result = append(result, row)
+		}
+	}
+
+	return result, nil
+}
+
+// parseMRDescriptionFields extracts branch, target, and worker from MR description.
+func parseMRDescriptionFields(desc string) (branch, target, worker string) {
+	for _, line := range strings.Split(desc, "\n") {
+		line = strings.TrimSpace(line)
+		colonIdx := strings.Index(line, ":")
+		if colonIdx == -1 {
+			continue
+		}
+		key := strings.TrimSpace(strings.ToLower(line[:colonIdx]))
+		value := strings.TrimSpace(line[colonIdx+1:])
+		if value == "" {
+			continue
+		}
+		switch key {
+		case "branch":
+			branch = value
+		case "target":
+			target = value
+		case "worker":
+			worker = value
+		}
+	}
+	return
+}
+
 // FetchWorkers fetches all running worker sessions (polecats and refinery) with activity data.
 func (f *LiveConvoyFetcher) FetchWorkers() ([]WorkerRow, error) {
 	// Load registered rigs to filter sessions

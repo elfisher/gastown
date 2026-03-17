@@ -908,6 +908,7 @@ func (f *LiveConvoyFetcher) FetchWorkers() ([]WorkerRow, error) {
 			IssueTitle:   issueTitle,
 			WorkStatus:   workStatus,
 			AgentType:    agentType,
+			TargetBranch: detectWorktreeTargetBranch(filepath.Join(f.townRoot, rig, "polecats", workerName, rig)),
 		})
 	}
 
@@ -1212,6 +1213,9 @@ func (f *LiveConvoyFetcher) FetchRigs() ([]RigRow, error) {
 			row.HasRefinery = true
 		}
 
+		// Detect target branch from active polecat worktrees
+		row.TargetBranch = detectRigTargetBranch(rigPath)
+
 		rows = append(rows, row)
 	}
 
@@ -1221,6 +1225,71 @@ func (f *LiveConvoyFetcher) FetchRigs() ([]RigRow, error) {
 	})
 
 	return rows, nil
+}
+
+// detectRigTargetBranch checks active polecat worktrees to find the dominant
+// target branch for a rig. Returns the branch name (e.g., "dashboard-v2") or
+// empty string if no active polecats or all target "main".
+func detectRigTargetBranch(rigPath string) string {
+	polecatsDir := filepath.Join(rigPath, "polecats")
+	entries, err := os.ReadDir(polecatsDir)
+	if err != nil {
+		return ""
+	}
+
+	branchCounts := make(map[string]int)
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		worktree := filepath.Join(polecatsDir, e.Name(), filepath.Base(rigPath))
+		branch := detectWorktreeTargetBranch(worktree)
+		if branch != "" {
+			branchCounts[branch]++
+		}
+	}
+
+	if len(branchCounts) == 0 {
+		return ""
+	}
+
+	// Return the most common non-main branch, or "main" if that's all there is
+	best := ""
+	bestCount := 0
+	for b, c := range branchCounts {
+		if c > bestCount || (c == bestCount && b != "main") {
+			best = b
+			bestCount = c
+		}
+	}
+	return best
+}
+
+// detectWorktreeTargetBranch reads the upstream tracking branch for a git worktree.
+// Returns the branch name (e.g., "dashboard-v2") or empty string.
+func detectWorktreeTargetBranch(worktreePath string) string {
+	// Quick check: does this look like a worktree?
+	gitFile := filepath.Join(worktreePath, ".git")
+	if _, err := os.Stat(gitFile); err != nil {
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "-C", worktreePath, "rev-parse", "--abbrev-ref", "@{upstream}")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	upstream := strings.TrimSpace(string(out))
+	// Strip "origin/" prefix
+	upstream = strings.TrimPrefix(upstream, "origin/")
+	if upstream == "" || upstream == "HEAD" {
+		return ""
+	}
+	return upstream
 }
 
 // FetchDogs returns all dogs in the kennel with their state.

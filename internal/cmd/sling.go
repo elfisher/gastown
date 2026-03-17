@@ -701,6 +701,21 @@ func runSling(cmd *cobra.Command, args []string) (retErr error) {
 		fmt.Printf("%s Slinging %s to %s...\n", style.Bold.Render("🎯"), beadID, targetAgent)
 	}
 
+	// Branch mismatch warning: check if this sling targets a different branch
+	// than the rig's other active polecats. Prevents accidental merges to wrong branch.
+	if newPolecatInfo != nil && !force {
+		slingBranch := newPolecatInfo.BaseBranch
+		if slingBranch == "" {
+			slingBranch = "main"
+		}
+		rigPath := filepath.Join(townRoot, newPolecatInfo.RigName)
+		if activeBranch := detectRigActiveBranch(rigPath); activeBranch != "" && activeBranch != slingBranch {
+			fmt.Printf("%s Branch mismatch: this sling targets %q but rig %s has active work on %q\n",
+				style.Warning.Render("⚠"), slingBranch, newPolecatInfo.RigName, activeBranch)
+			fmt.Printf("  Use --base-branch %s to match, or --force to override\n", activeBranch)
+		}
+	}
+
 	// Handle --force when bead is already hooked/in_progress: send shutdown to old polecat and unhook (GH#1380)
 	if (info.Status == "hooked" || info.Status == "in_progress") && force && info.Assignee != "" {
 		fmt.Printf("%s Bead already hooked to %s, forcing reassignment...\n", style.Warning.Render("⚠"), info.Assignee)

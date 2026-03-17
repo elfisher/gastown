@@ -44,6 +44,7 @@ type RigRow struct {
 	CrewCount    int
 	HasWitness   bool
 	HasRefinery  bool
+	TargetBranch string // Active target branch (e.g., "main", "dashboard-v2"); empty if no active work
 }
 
 // DogRow represents a Deacon helper worker.
@@ -204,6 +205,7 @@ type WorkerRow struct {
 	IssueTitle   string        // Issue title (truncated)
 	WorkStatus   string        // working, stale, stuck, idle
 	AgentType    string        // "polecat" (ephemeral sessions) or "refinery" (permanent)
+	TargetBranch string        // Base branch this worker targets (e.g., "main", "dashboard-v2")
 }
 
 // MergeQueueRow represents a PR in the merge queue.

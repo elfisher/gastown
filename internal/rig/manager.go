@@ -90,6 +90,7 @@ type RigConfig struct {
 	UpstreamURL   string       `json:"upstream_url,omitempty"`   // optional upstream URL (for fork workflows)
 	LocalRepo     string       `json:"local_repo,omitempty"`     // optional local reference repo
 	DefaultBranch string       `json:"default_branch,omitempty"` // main, master, etc.
+	BaseBranch    string       `json:"base_branch,omitempty"`    // working branch for fork workflows (falls back to default_branch)
 	CreatedAt     time.Time    `json:"created_at"`               // when rig was created
 	Beads         *BeadsConfig `json:"beads,omitempty"`
 

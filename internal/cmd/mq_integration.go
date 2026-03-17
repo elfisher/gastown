@@ -381,8 +381,8 @@ func runMqIntegrationCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fetching from origin: %w", err)
 	}
 
-	// 2. Create branch from base (default: rig's default_branch)
-	baseBranchName := r.DefaultBranch()
+	// 2. Create branch from base (default: rig's working branch)
+	baseBranchName := r.WorkingBranch()
 	if mqIntegrationCreateBaseBranch != "" {
 		baseBranchName = strings.TrimPrefix(mqIntegrationCreateBaseBranch, "origin/")
 	}
@@ -493,7 +493,7 @@ func runMqIntegrationLand(cmd *cobra.Command, args []string) error {
 	// Fall back to rig's default_branch for backward compat with pre-base-branch epics
 	targetBranch := beads.GetBaseBranchField(epic.Description)
 	if targetBranch == "" {
-		targetBranch = r.DefaultBranch()
+		targetBranch = r.WorkingBranch()
 	}
 
 	fmt.Printf("Landing integration branch for epic: %s\n", epicID)
@@ -847,7 +847,7 @@ func runMqIntegrationStatus(cmd *cobra.Command, args []string) error {
 	// Fall back to rig's default_branch for backward compat with pre-base-branch epics
 	baseBranch := beads.GetBaseBranchField(epic.Description)
 	if baseBranch == "" {
-		baseBranch = r.DefaultBranch()
+		baseBranch = r.WorkingBranch()
 	}
 
 	// Check if integration branch exists (locally or remotely)

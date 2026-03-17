@@ -7,14 +7,9 @@ import (
 	"testing"
 )
 
-// TestRig_DefaultBranch_NoBaseBranch is a NEGATIVE test proving that
-// Rig has no concept of a working/base branch separate from default_branch.
-// Everything defaults to default_branch (typically "main").
-//
-// EXPECTED AFTER FIX: Rig.WorkingBranch() returns base_branch when set,
-// falling back to DefaultBranch() when not set.
-func TestRig_DefaultBranch_NoBaseBranch(t *testing.T) {
-	// Create a rig config with default_branch but no base_branch
+// TestRig_WorkingBranch_FallsBackToDefault verifies that WorkingBranch()
+// returns DefaultBranch when base_branch is not set.
+func TestRig_WorkingBranch_FallsBackToDefault(t *testing.T) {
 	rigDir := t.TempDir()
 	cfg := RigConfig{
 		Type:          "rig",
@@ -29,28 +24,15 @@ func TestRig_DefaultBranch_NoBaseBranch(t *testing.T) {
 
 	r := &Rig{Name: "test-rig", Path: rigDir}
 
-	// Current: DefaultBranch is the only option
-	got := r.DefaultBranch()
-	if got != "main" {
-		t.Errorf("DefaultBranch() = %q, want %q", got, "main")
+	if got := r.WorkingBranch(); got != "main" {
+		t.Errorf("WorkingBranch() = %q, want %q (should fall back to DefaultBranch)", got, "main")
 	}
-
-	// NEGATIVE: WorkingBranch() doesn't exist yet.
-	// After fix:
-	// got = r.WorkingBranch()
-	// if got != "main" {
-	//     t.Errorf("WorkingBranch() should fall back to DefaultBranch when base_branch not set, got %q", got)
-	// }
 }
 
-// TestRig_BaseBranch_NotSupported is a NEGATIVE test proving that
-// RigConfig has no base_branch field. Setting it in JSON is silently ignored.
-//
-// EXPECTED AFTER FIX: RigConfig.BaseBranch is parsed from JSON and
-// Rig.WorkingBranch() returns it.
-func TestRig_BaseBranch_NotSupported(t *testing.T) {
+// TestRig_WorkingBranch_RespectsBaseBranch verifies that WorkingBranch()
+// returns base_branch when set in the rig config.
+func TestRig_WorkingBranch_RespectsBaseBranch(t *testing.T) {
 	rigDir := t.TempDir()
-	// Write config with a base_branch field (not in the struct yet)
 	configJSON := `{
 		"type": "rig",
 		"version": 1,
@@ -64,15 +46,11 @@ func TestRig_BaseBranch_NotSupported(t *testing.T) {
 
 	r := &Rig{Name: "test-rig", Path: rigDir}
 
-	// NEGATIVE: DefaultBranch still returns "main" — base_branch is ignored
-	got := r.DefaultBranch()
-	if got != "main" {
-		t.Errorf("DefaultBranch() = %q, want %q", got, "main")
+	if got := r.WorkingBranch(); got != "dashboard-v2" {
+		t.Errorf("WorkingBranch() = %q, want %q", got, "dashboard-v2")
 	}
-
-	// After fix:
-	// got = r.WorkingBranch()
-	// if got != "dashboard-v2" {
-	//     t.Errorf("WorkingBranch() = %q, want %q", got, "dashboard-v2")
-	// }
+	// DefaultBranch should still return main
+	if got := r.DefaultBranch(); got != "main" {
+		t.Errorf("DefaultBranch() = %q, want %q (should be unchanged)", got, "main")
+	}
 }

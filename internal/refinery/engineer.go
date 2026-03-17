@@ -548,7 +548,7 @@ func (e *Engineer) doMerge(ctx context.Context, branch, target, sourceIssue stri
 	// Only serialize pushes to the rig's default branch (typically main).
 	// Integration-branch and feature-branch pushes don't need serialization.
 	var pushHolder string
-	if target == e.rig.DefaultBranch() {
+	if target == e.rig.DefaultBranch() || target == e.rig.WorkingBranch() {
 		var slotErr error
 		pushHolder, slotErr = e.acquireMainPushSlot(ctx)
 		if slotErr != nil {

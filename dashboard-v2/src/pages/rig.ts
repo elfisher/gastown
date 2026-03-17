@@ -42,7 +42,7 @@ export async function renderRigPage(name: string): Promise<string> {
           <tbody>${mqItems.map((m) => `
             <tr>
               <td class="font-mono text-xs">${escapeHtml(m.id)}</td>
-              <td>${m.issue ? linkify(escapeHtml(m.issue)) : "—"}</td>
+              <td>${m.issue ? escapeHtml(m.issue) : "—"}</td>
               <td>${m.worker ? escapeHtml(m.worker) : "—"}</td>
               <td>${statusBadge(m.status)}</td>
             </tr>`).join("")}

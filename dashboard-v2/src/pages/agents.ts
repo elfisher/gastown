@@ -1,4 +1,5 @@
 import type { Agent } from "../data/schemas.js";
+import { breadcrumbs } from "./helpers.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -105,6 +106,7 @@ export function renderAgentDetailPage(agent: Agent, output: string): string {
   const badge = STATUS_BADGE[agent.status] ?? "badge-ghost";
 
   return `<div>
+    ${breadcrumbs([{ label: "Gas Town", href: "/" }, { label: "Agents", href: "/agents" }, { label: agent.name }])}
     <div class="flex items-center gap-3 mb-4">
       <span class="text-3xl">${icon}</span>
       <div>

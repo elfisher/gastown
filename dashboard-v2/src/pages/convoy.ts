@@ -1,6 +1,6 @@
 import { getConvoy } from "../data/convoys.js";
 import { listBeads, getBead } from "../data/beads.js";
-import { escapeHtml, statusBadge, statusColor, priorityLabel } from "./helpers.js";
+import { escapeHtml, statusBadge, statusColor, priorityLabel, breadcrumbs } from "./helpers.js";
 import type { Bead, BeadDep } from "../data/schemas.js";
 
 interface DagNode {
@@ -70,6 +70,8 @@ export async function renderConvoyPage(id: string): Promise<string> {
   const dagData = JSON.stringify({ nodes, edges });
 
   return `
+${breadcrumbs([{ label: "Gas Town", href: "/" }, { label: "Convoys", href: "/convoys" }, { label: convoy.name }])}
+
 <div class="prose max-w-none mb-6">
   <h1>Convoy: ${escapeHtml(convoy.name)}</h1>
   <div class="flex gap-2 items-center not-prose">

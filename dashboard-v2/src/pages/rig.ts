@@ -2,7 +2,7 @@ import { getRig } from "../data/rigs.js";
 import { listConvoys } from "../data/convoys.js";
 import { listAgentsForRig } from "../data/agents.js";
 import { getEventsForRig } from "../data/events.js";
-import { escapeHtml, statusBadge, priorityLabel } from "./helpers.js";
+import { escapeHtml, statusBadge, priorityLabel, breadcrumbs } from "./helpers.js";
 
 export async function renderRigPage(name: string): Promise<string> {
   let rig;
@@ -55,6 +55,8 @@ export async function renderRigPage(name: string): Promise<string> {
     : `<li class="text-base-content/50 text-sm">No recent activity</li>`;
 
   return `
+${breadcrumbs([{ label: "Gas Town", href: "/" }, { label: rig.name }])}
+
 <div class="prose max-w-none mb-6">
   <h1>Rig: ${escapeHtml(rig.name)}</h1>
 </div>

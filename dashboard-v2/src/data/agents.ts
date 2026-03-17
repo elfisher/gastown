@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { exec } from "./exec.js";
+import { getSessionOutput } from "./terminal.js";
 import type { Agent } from "./schemas.js";
 
 const SYSTEM_ROLES = new Map<string, Agent["role"]>([
@@ -163,27 +164,9 @@ export async function listAgentsForRig(rigName: string): Promise<Agent[]> {
 }
 
 export async function getAgentPreview(sessionName: string, lines = 5): Promise<string> {
-  try {
-    const result = await exec(
-      "tmux",
-      ["capture-pane", "-t", sessionName, "-p", "-S", `-${lines}`],
-      { timeoutMs: 5_000 }
-    );
-    return result.stdout.trimEnd();
-  } catch {
-    return "(session not available)";
-  }
+  return getSessionOutput(sessionName, lines);
 }
 
 export async function getAgentOutput(sessionName: string, lines = 20): Promise<string> {
-  try {
-    const result = await exec(
-      "tmux",
-      ["capture-pane", "-t", sessionName, "-p", "-S", `-${lines}`],
-      { timeoutMs: 5_000 }
-    );
-    return result.stdout.trimEnd();
-  } catch {
-    return "(session not available)";
-  }
+  return getSessionOutput(sessionName, lines);
 }

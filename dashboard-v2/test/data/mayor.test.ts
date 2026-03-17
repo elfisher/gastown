@@ -19,10 +19,17 @@ vi.mock("../../src/config.js", () => ({
   config: { townRoot: "/tmp/gt", port: 8081, host: "0.0.0.0" },
 }));
 
+vi.mock("../../src/data/terminal.js", () => ({
+  getSessionOutput: vi.fn().mockResolvedValue("(session not available)"),
+  getSessionLines: vi.fn().mockResolvedValue([]),
+}));
+
 import { getMayorMessages, nudgeMayor } from "../../src/data/mayor.js";
 import { exec } from "../../src/data/exec.js";
+import { getSessionLines } from "../../src/data/terminal.js";
 
 const mockExec = vi.mocked(exec);
+const mockGetSessionLines = vi.mocked(getSessionLines);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -30,17 +37,17 @@ beforeEach(() => {
 
 describe("getMayorMessages", () => {
   it("parses tmux output into messages", async () => {
-    mockExec.mockResolvedValueOnce({
-      stdout: "All 4 polecats running.\n\nConvoy created with beads gt-abc12.\n",
-      stderr: "",
-    });
+    mockGetSessionLines.mockResolvedValueOnce([
+      "All 4 polecats running.",
+      "Convoy created with beads gt-abc12.",
+    ]);
     const msgs = await getMayorMessages();
     expect(msgs.length).toBeGreaterThan(0);
     expect(msgs[0]!.sender).toBe("mayor");
   });
 
   it("returns system message when tmux fails", async () => {
-    mockExec.mockRejectedValueOnce(new Error("no session"));
+    mockGetSessionLines.mockRejectedValueOnce(new Error("no session"));
     const msgs = await getMayorMessages();
     expect(msgs).toHaveLength(1);
     expect(msgs[0]!.sender).toBe("system");
@@ -48,10 +55,9 @@ describe("getMayorMessages", () => {
   });
 
   it("detects action messages", async () => {
-    mockExec.mockResolvedValueOnce({
-      stdout: "Slung gt-abc12 to furiosa\n",
-      stderr: "",
-    });
+    mockGetSessionLines.mockResolvedValueOnce([
+      "Slung gt-abc12 to furiosa",
+    ]);
     const msgs = await getMayorMessages();
     expect(msgs.some((m) => m.isAction)).toBe(true);
   });

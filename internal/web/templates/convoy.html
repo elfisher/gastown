@@ -69,20 +69,16 @@
                 </div>
                 {{end}}
                 <div class="stat">
-                    <span class="stat-value">{{.Summary.PolecatCount}}</span>
-                    <span class="stat-label">🦨 Polecats</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value">{{.Summary.HookCount}}</span>
-                    <span class="stat-label">🪝 Hooks</span>
+                    <span class="stat-value">{{.Summary.ConvoyCount}}</span>
+                    <span class="stat-label">🚚 Convoys</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value">{{.Summary.IssueCount}}</span>
                     <span class="stat-label">📋 Work</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-value">{{.Summary.ConvoyCount}}</span>
-                    <span class="stat-label">🚚 Convoys</span>
+                    <span class="stat-value">{{.Summary.PolecatCount}}</span>
+                    <span class="stat-label">🦨 Workers</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value">{{.Summary.EscalationCount}}</span>
@@ -294,10 +290,10 @@
                 </div>
             </div>
 
-            <!-- Polecats Panel -->
-            <div class="panel">
+            <!-- Polecats Panel (collapsed by default — implementation detail) -->
+            <div class="panel collapsed">
                 <div class="panel-header">
-                    <h2>🦨 Polecats</h2>
+                    <h2>🦨 Workers</h2>
                     <span class="count">{{len .Workers}}</span>
                     <button class="collapse-btn" aria-label="Toggle panel">▼</button>
                     <button class="expand-btn">Expand</button>
@@ -356,8 +352,8 @@
                 </div>
             </div>
 
-            <!-- Sessions Panel -->
-            <div class="panel">
+            <!-- Sessions Panel (collapsed by default — implementation detail) -->
+            <div class="panel collapsed">
                 <div class="panel-header">
                     <h2>📟 Sessions</h2>
                     <span class="count">{{len .Sessions}}</span>

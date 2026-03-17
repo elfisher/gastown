@@ -418,8 +418,8 @@ func TestConvoyHandler_PolecatWorkersRendering(t *testing.T) {
 	body := w.Body.String()
 
 	// Check polecat section header
-	if !strings.Contains(body, "Polecats") {
-		t.Error("Response should contain polecats section header")
+	if !strings.Contains(body, "Workers") {
+		t.Error("Response should contain workers section header")
 	}
 
 	// Check polecat names
@@ -651,8 +651,8 @@ func TestConvoyHandler_FullDashboard(t *testing.T) {
 	if !strings.Contains(body, "#789") {
 		t.Error("Response should contain PR data")
 	}
-	if !strings.Contains(body, "Polecats") {
-		t.Error("Response should contain polecats section")
+	if !strings.Contains(body, "Workers") {
+		t.Error("Response should contain workers section")
 	}
 	if !strings.Contains(body, "worker1") {
 		t.Error("Response should contain polecat data")
@@ -745,7 +745,7 @@ func TestE2E_Server_FullDashboard(t *testing.T) {
 		{"Merge queue section", "Merge Queue"},
 		{"PR number", "#101"},
 		{"PR repo", "roxas"},
-		{"Polecats section", "Polecats"},
+		{"Polecats section", "Workers"},
 		{"Polecat name", "furiosa"},
 		{"HTMX SSE trigger", `hx-trigger="sse:dashboard-update`},
 	}

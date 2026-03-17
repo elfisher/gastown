@@ -1,3 +1,4 @@
+import { config } from "../config.js";
 import { exec } from "./exec.js";
 import type { Agent } from "./schemas.js";
 
@@ -18,6 +19,51 @@ function parseSession(name: string): { rig: string; role: Agent["role"]; agentNa
   return { rig: prefix, role, agentName: suffix };
 }
 
+/** Build a map from beads_prefix (e.g. "gt") to rig name (e.g. "gastown"). */
+async function loadPrefixToRigMap(): Promise<Map<string, string>> {
+  try {
+    const { stdout } = await exec("gt", ["rig", "list", "--json"], {
+      cwd: config.townRoot,
+      timeoutMs: 5_000,
+    });
+    const jsonStart = stdout.indexOf("[");
+    if (jsonStart < 0) return new Map();
+    const rigs = JSON.parse(stdout.slice(jsonStart)) as Array<{ name: string; beads_prefix: string }>;
+    return new Map(rigs.map((r) => [r.beads_prefix, r.name]));
+  } catch {
+    return new Map();
+  }
+}
+
+/** Derive the gt hook status target path for an agent. */
+function hookTarget(rigName: string, role: Agent["role"], agentName: string): string {
+  if (role === "mayor" || role === "deacon" || role === "boot") return `${role}`;
+  if (role === "polecat") return `${rigName}/polecats/${agentName}`;
+  return `${rigName}/${role}`;
+}
+
+/** Query hooked work for an agent. Returns "id: title" or undefined. */
+async function getHookedWork(target: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await exec(
+      "gt",
+      ["hook", "status", target, "--json"],
+      { cwd: config.townRoot, timeoutMs: 5_000 }
+    );
+    // stdout may contain non-JSON preamble (e.g. build warnings); extract JSON object
+    const jsonStart = stdout.indexOf("{");
+    if (jsonStart < 0) return undefined;
+    const info = JSON.parse(stdout.slice(jsonStart));
+    if (!info.has_work) return undefined;
+    const bead = info.pinned_bead;
+    if (bead?.id && bead?.title) return `${bead.id}: ${bead.title}`;
+    if (info.progress?.root_id) return `${info.progress.root_id}: ${info.progress.root_title ?? ""}`.trim();
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function listAgents(): Promise<Agent[]> {
   let stdout: string;
   try {
@@ -30,6 +76,8 @@ export async function listAgents(): Promise<Agent[]> {
   } catch {
     return [];
   }
+
+  const prefixMap = await loadPrefixToRigMap();
 
   const agents: Agent[] = [];
   for (const line of stdout.split("\n")) {
@@ -54,6 +102,16 @@ export async function listAgents(): Promise<Agent[]> {
       lastActivity: activity,
     });
   }
+
+  // Populate currentWork from hooked beads in parallel
+  await Promise.all(
+    agents.map(async (agent) => {
+      const rigName = prefixMap.get(agent.rig) ?? agent.rig;
+      const target = hookTarget(rigName, agent.role, agent.name);
+      agent.currentWork = await getHookedWork(target);
+    })
+  );
+
   return agents;
 }
 

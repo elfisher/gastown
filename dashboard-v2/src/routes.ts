@@ -3,6 +3,7 @@ import { listRigs } from "./data/rigs.js";
 import { getMayorMessages } from "./data/mayor.js";
 import { getPipelineData } from "./data/pipeline.js";
 import { listAgents, getAgentPreview, getAgentOutput } from "./data/agents.js";
+import { listConvoys } from "./data/convoys.js";
 import { renderLayout } from "./pages/layout.js";
 import { renderMayorPage } from "./pages/mayor.js";
 import { renderPipelinePage } from "./pages/pipeline.js";
@@ -10,6 +11,7 @@ import { registerMayorApi } from "./api/mayor.js";
 import { renderRigPage } from "./pages/rig.js";
 import { renderConvoyPage } from "./pages/convoy.js";
 import { renderBeadPage } from "./pages/bead.js";
+import { renderConvoyListPage } from "./pages/convoy-list.js";
 import { registerPipelineApi } from "./api/pipeline.js";
 import { renderAgentsPage, renderAgentDetailPage } from "./pages/agents.js";
 import { registerAgentsApi } from "./api/agents.js";
@@ -89,6 +91,25 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/tour", async (_req, reply) => {
     const html = await withLayout("Tour", placeholder("Tour"), "/tour");
+    return reply.type("text/html").send(html);
+  });
+
+  app.get("/convoys", async (_req, reply) => {
+    const convoys = await listConvoys();
+    const html = await withLayout(
+      "Convoys",
+      renderConvoyListPage(convoys),
+      "/convoys"
+    );
+    return reply.type("text/html").send(html);
+  });
+
+  app.get("/overview", async (_req, reply) => {
+    const html = await withLayout(
+      "Project Overview",
+      placeholder("Project Overview"),
+      "/overview"
+    );
     return reply.type("text/html").send(html);
   });
 

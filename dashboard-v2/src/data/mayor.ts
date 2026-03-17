@@ -11,8 +11,40 @@ const ACTION_PATTERNS = [
   /\bnudge\b/i,
 ];
 
+/** Lines to filter from tmux capture (noise / recursive dashboard content). */
+const NOISE_PATTERNS = [
+  /^\s*$/,
+  /^\s*[>%$#]\s*$/,
+  /hx-get=|hx-post=|hx-trigger=|hx-swap=/i,
+  /class="chat |class="alert /,
+  /chat-bubble|chat-start|chat-end/,
+  /whitespace-pre-wrap/,
+  /^\s*<\/?div/,
+  /^\s*<\/?form/,
+  /^\s*<\/?pre/,
+  /^\s*<input /,
+  /^\s*<button /,
+  /^\s*<span /,
+  /^\s*<time /,
+];
+
+/** Server-side store for human-sent messages. */
+const sentMessages: MayorMessage[] = [];
+
+export function addSentMessage(text: string): void {
+  sentMessages.push({
+    sender: "human",
+    text,
+    timestamp: new Date().toISOString(),
+  });
+}
+
 function isActionMessage(text: string): boolean {
   return ACTION_PATTERNS.some((p) => p.test(text));
+}
+
+function isNoiseLine(line: string): boolean {
+  return NOISE_PATTERNS.some((p) => p.test(line));
 }
 
 function parseTimestamp(line: string): string | null {
@@ -25,18 +57,19 @@ function parseTimestamp(line: string): string | null {
 export async function getMayorMessages(): Promise<MayorMessage[]> {
   const messages: MayorMessage[] = [];
 
-  // Capture mayor tmux pane output
   try {
     const result = await exec(
       "tmux",
       ["capture-pane", "-t", "hq-mayor", "-p", "-S", "-200"],
       { timeoutMs: 5_000 }
     );
-    const lines = result.stdout.split("\n").filter((l) => l.trim());
-    // Group non-empty lines into message blocks separated by blank lines or prompt markers
+    const lines = result.stdout
+      .split("\n")
+      .filter((l) => l.trim() && !isNoiseLine(l));
+
     let block: string[] = [];
     for (const line of lines) {
-      if (line.match(/^\s*[>%$#]\s*$/) || line.match(/^\s*$/)) {
+      if (line.match(/^\s*[>%$#]\s*$/)) {
         if (block.length > 0) {
           const text = block.join("\n");
           messages.push({
@@ -61,7 +94,6 @@ export async function getMayorMessages(): Promise<MayorMessage[]> {
       });
     }
   } catch {
-    // Mayor session may not be running
     messages.push({
       sender: "system",
       text: "Mayor session not available. Start with: gt mayor attach",
@@ -69,7 +101,10 @@ export async function getMayorMessages(): Promise<MayorMessage[]> {
     });
   }
 
-  return messages;
+  // Merge sent messages into the timeline by timestamp
+  const all = [...messages, ...sentMessages];
+  all.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  return all;
 }
 
 export async function nudgeMayor(message: string): Promise<void> {

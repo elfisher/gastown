@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/data/mayor.js", () => ({
   getMayorMessages: vi.fn(),
   nudgeMayor: vi.fn(),
+  addSentMessage: vi.fn(),
 }));
 
 vi.mock("../../src/data/rigs.js", () => ({

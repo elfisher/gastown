@@ -248,7 +248,7 @@ func runOrphans(cmd *cobra.Command, args []string) error {
 	}
 
 	// --- Unmerged polecat worktree branches ---
-	defaultBranch := r.DefaultBranch()
+	defaultBranch := r.WorkingBranch()
 	fmt.Printf("Scanning polecat worktrees for unmerged branches...\n\n")
 
 	polecatBranches, skipped, err := findOrphanPolecatBranches(r.Path, rigName, defaultBranch)

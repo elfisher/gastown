@@ -215,7 +215,7 @@ func SpawnPolecatForSling(rigName string, opts SlingSpawnOptions) (*SpawnedPolec
 
 			effectiveBranch := strings.TrimPrefix(baseBranch, "origin/")
 			if effectiveBranch == "" {
-				effectiveBranch = r.DefaultBranch()
+				effectiveBranch = r.WorkingBranch()
 			}
 
 			return &SpawnedPolecatInfo{
@@ -300,7 +300,7 @@ func SpawnPolecatForSling(rigName string, opts SlingSpawnOptions) (*SpawnedPolec
 	// Compute effective base branch (strip origin/ prefix since formula prepends it)
 	effectiveBranch := strings.TrimPrefix(baseBranch, "origin/")
 	if effectiveBranch == "" {
-		effectiveBranch = r.DefaultBranch()
+		effectiveBranch = r.WorkingBranch()
 	}
 
 	return &SpawnedPolecatInfo{

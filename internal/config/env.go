@@ -148,6 +148,11 @@ func AgentEnv(cfg AgentEnvConfig) map[string]string {
 		env["BEADS_AGENT_NAME"] = fmt.Sprintf("%s/%s", cfg.Rig, cfg.AgentName)
 	}
 
+	// Suppress interactive prompts from npm/npx in autonomous agent sessions.
+	// npx prompts "Need to install X, proceed? (y)" which hangs polecats.
+	// CI=true makes npm/npx non-interactive (auto-yes for installs, no progress bars).
+	env["CI"] = "true"
+
 	// Add optional runtime config directory
 	if cfg.RuntimeConfigDir != "" {
 		env["CLAUDE_CONFIG_DIR"] = cfg.RuntimeConfigDir

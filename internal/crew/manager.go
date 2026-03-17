@@ -207,7 +207,7 @@ func (m *Manager) addLocked(name string, createBranch bool) (*CrewWorker, error)
 	// Clone the rig repo on the configured default branch.
 	// CloneBranch ensures the crew lands on the rig's default_branch even when
 	// it differs from the remote's HEAD. Falls back gracefully for new/empty repos.
-	defaultBranch := m.rig.DefaultBranch()
+	defaultBranch := m.rig.WorkingBranch()
 	if m.rig.LocalRepo != "" {
 		if err := m.git.CloneBranchWithReference(m.rig.GitURL, crewPath, defaultBranch, m.rig.LocalRepo); err != nil {
 			style.PrintWarning("could not clone branch %s with reference: %v", defaultBranch, err)

@@ -1,6 +1,7 @@
 import { getConvoy } from "../data/convoys.js";
 import { listBeads } from "../data/beads.js";
 import { escapeHtml, statusBadge, statusColor, priorityLabel } from "./helpers.js";
+import { linkify } from "./linkify.js";
 import type { Bead, BeadDep } from "../data/schemas.js";
 
 interface DagNode {
@@ -54,7 +55,7 @@ export async function renderConvoyPage(id: string): Promise<string> {
         <td><a href="/bead/${encodeURIComponent(b.id)}" class="link link-hover font-mono text-xs">${escapeHtml(b.id)}</a></td>
         <td>${escapeHtml(b.title)}</td>
         <td>${statusBadge(b.status)}</td>
-        <td>${escapeHtml(b.assignee ?? "—")}</td>
+        <td>${linkify(escapeHtml(b.assignee ?? "—"))}</td>
         <td>${priorityLabel(b.priority)}</td>
       </tr>`).join("")
     : `<tr><td colspan="5" class="text-base-content/50">No beads in convoy</td></tr>`;

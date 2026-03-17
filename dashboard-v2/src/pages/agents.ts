@@ -1,4 +1,5 @@
 import type { Agent } from "../data/schemas.js";
+import { linkify } from "./linkify.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -54,7 +55,7 @@ function renderAgentCard(agent: Agent): string {
         <span class="mx-1">·</span>
         <span>${elapsedTime(agent.startedAt)}</span>
       </div>
-      ${agent.currentWork ? `<div class="text-xs mt-1"><span class="badge badge-outline badge-xs">${escapeHtml(agent.currentWork)}</span></div>` : ""}
+      ${agent.currentWork ? `<div class="text-xs mt-1"><span class="badge badge-outline badge-xs">${linkify(escapeHtml(agent.currentWork))}</span></div>` : ""}
       ${preview}
     </div>
   </a>`;
@@ -131,7 +132,7 @@ export function renderAgentDetailPage(agent: Agent, output: string): string {
       </div>
     </div>
 
-    ${agent.currentWork ? `<div class="mb-4"><span class="badge badge-outline">${escapeHtml(agent.currentWork)}</span></div>` : ""}
+    ${agent.currentWork ? `<div class="mb-4"><span class="badge badge-outline">${linkify(escapeHtml(agent.currentWork))}</span></div>` : ""}
 
     <div class="mb-2 flex items-center gap-2">
       <h2 class="text-lg font-semibold">Live Output</h2>

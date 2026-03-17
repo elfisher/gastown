@@ -1,4 +1,5 @@
 import type { MayorMessage } from "../data/schemas.js";
+import { linkify } from "./linkify.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -23,7 +24,7 @@ function renderMessage(msg: MayorMessage): string {
       <span>⚡</span>
       <div>
         <div class="text-xs opacity-60">${escapeHtml(msg.timestamp)}</div>
-        <pre class="whitespace-pre-wrap text-sm">${escapeHtml(msg.text)}</pre>
+        <pre class="whitespace-pre-wrap text-sm">${linkify(escapeHtml(msg.text))}</pre>
       </div>
     </div>`;
   }
@@ -34,7 +35,7 @@ function renderMessage(msg: MayorMessage): string {
       <time class="text-xs opacity-50 ml-1">${escapeHtml(msg.timestamp)}</time>
     </div>
     <div class="chat-bubble ${bubbleClass}">
-      <pre class="whitespace-pre-wrap text-sm font-sans">${escapeHtml(msg.text)}</pre>
+      <pre class="whitespace-pre-wrap text-sm font-sans">${linkify(escapeHtml(msg.text))}</pre>
     </div>
   </div>`;
 }

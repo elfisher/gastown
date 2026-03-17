@@ -1,6 +1,7 @@
 import { getBead, getBeadHistory } from "../data/beads.js";
 import { listConvoys } from "../data/convoys.js";
 import { escapeHtml, statusBadge, priorityLabel } from "./helpers.js";
+import { linkify } from "./linkify.js";
 import type { BeadDetail, BeadHistoryEntry } from "../data/schemas.js";
 
 /** Extract rig name from bead ID prefix (e.g. "gt-abc" → "gastown" via prefix lookup) */
@@ -78,7 +79,7 @@ function renderDescription(description: string): string {
   const descLines = clean.split("\n").filter((l) => !/^[-*]\s+\[[ xX]\]/.test(l.trim()));
   const descText = descLines.join("\n").trim();
   if (descText) {
-    sections.push(`<div class="whitespace-pre-wrap text-sm">${escapeHtml(descText)}</div>`);
+    sections.push(`<div class="whitespace-pre-wrap text-sm">${linkify(escapeHtml(descText))}</div>`);
   }
 
   // Render checklist as acceptance criteria
@@ -86,7 +87,7 @@ function renderDescription(description: string): string {
     const items = checklist.map((c) =>
       `<li><label class="flex items-center gap-2 cursor-default">
         <input type="checkbox" class="checkbox checkbox-sm" ${c.checked ? "checked" : ""} disabled />
-        <span class="text-sm">${escapeHtml(c.text)}</span>
+        <span class="text-sm">${linkify(escapeHtml(c.text))}</span>
       </label></li>`
     ).join("");
     sections.push(`

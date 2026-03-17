@@ -3,6 +3,7 @@ import { listConvoys } from "../data/convoys.js";
 import { listAgentsForRig } from "../data/agents.js";
 import { getEventsForRig } from "../data/events.js";
 import { escapeHtml, statusBadge, priorityLabel } from "./helpers.js";
+import { linkify } from "./linkify.js";
 
 export async function renderRigPage(name: string): Promise<string> {
   let rig;
@@ -50,7 +51,7 @@ export async function renderRigPage(name: string): Promise<string> {
       <li class="text-xs py-1 border-b border-base-300">
         <span class="font-mono text-base-content/50">${escapeHtml(e.timestamp)}</span>
         <span class="font-semibold">${escapeHtml(e.source)}</span>
-        ${e.detail ? escapeHtml(e.detail) : ""}
+        ${e.detail ? linkify(escapeHtml(e.detail)) : ""}
       </li>`).join("")
     : `<li class="text-base-content/50 text-sm">No recent activity</li>`;
 

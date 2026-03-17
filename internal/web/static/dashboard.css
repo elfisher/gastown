@@ -38,6 +38,18 @@
             max-width: 100%;
         }
 
+        /* Entity links — clickable bead/convoy IDs */
+        .entity-link {
+            color: var(--blue);
+            text-decoration: none;
+            cursor: pointer;
+            border-bottom: 1px dotted var(--blue);
+        }
+        .entity-link:hover {
+            color: var(--cyan);
+            border-bottom-color: var(--cyan);
+        }
+
         header {
             display: flex;
             justify-content: space-between;

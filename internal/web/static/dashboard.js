@@ -18,6 +18,24 @@
     };
 
     // ============================================
+    // LINKIFY — entity ID → clickable link
+    // ============================================
+    // Matches bead IDs (e.g. gt-abc12, hq-cv-xyz) in text and wraps them in <a> tags.
+    var beadIdRe = /\b([a-z]{1,5}(?:-[a-z]{1,5})*-[a-z0-9][a-z0-9._-]*)\b/g;
+
+    function linkify(text) {
+        if (!text) return '';
+        var safe = escapeHtml(text);
+        return safe.replace(beadIdRe, function(match) {
+            if (match.indexOf('-cv-') !== -1) {
+                return '<a href="javascript:void(0)" class="entity-link" onclick="openConvoyDetail(\'' + match + '\')">' + match + '</a>';
+            }
+            return '<a href="javascript:void(0)" class="entity-link" onclick="openIssueDetail(\'' + match + '\')">' + match + '</a>';
+        });
+    }
+    window.linkify = linkify;
+
+    // ============================================
     // SSE (Server-Sent Events) CONNECTION
     // ============================================
     window.sseConnected = false;
@@ -1080,7 +1098,7 @@
                             '<td><span class="crew-name">' + escapeHtml(member.name) + '</span></td>' +
                             '<td><span class="crew-rig">' + escapeHtml(member.rig) + '</span></td>' +
                             '<td><span class="' + stateClass + '">' + stateIcon + stateText + '</span></td>' +
-                            '<td><span class="crew-hook">' + (member.hook ? escapeHtml(member.hook) : '—') + '</span></td>' +
+                            '<td><span class="crew-hook">' + (member.hook ? linkify(member.hook) : '—') + '</span></td>' +
                             '<td class="crew-activity">' + (member.last_active || '—') + '</td>' +
                             '<td>' + sessionBadge + '</td>' +
                             '<td><button class="attach-btn" data-cmd="' + escapeHtml(attachCmd) + '" title="Copy attach command">📎 Attach</button></td>';
@@ -1533,7 +1551,7 @@
 
                         tr.innerHTML =
                             '<td>' + priBadge + '</td>' +
-                            '<td><span class="ready-id">' + escapeHtml(item.id) + '</span></td>' +
+                            '<td><span class="ready-id">' + linkify(item.id) + '</span></td>' +
                             '<td><span class="ready-title">' + escapeHtml(item.title || '') + '</span></td>' +
                             '<td><span class="' + sourceClass + '">' + escapeHtml(item.source) + '</span></td>' +
                             '<td><button class="sling-btn" data-bead-id="' + escapeHtml(item.id) + '" title="Sling to rig">Sling</button></td>';
@@ -1639,7 +1657,7 @@
 
                 tr.innerHTML =
                     '<td class="convoy-issue-status">' + statusBadge + '</td>' +
-                    '<td><span class="issue-id">' + escapeHtml(issue.id) + '</span></td>' +
+                    '<td><span class="issue-id">' + linkify(issue.id) + '</span></td>' +
                     '<td class="issue-title">' + escapeHtml(issue.title || '') + '</td>' +
                     '<td>' + (issue.assignee ? '<span class="badge badge-blue">' + escapeHtml(issue.assignee) + '</span>' : '<span class="badge badge-muted">Unassigned</span>') + '</td>' +
                     '<td>' + escapeHtml(issue.progress || '') + '</td>';
@@ -3220,7 +3238,7 @@
 
             html += '<tr class="tracked-issue-row tracked-issue-' + escapeHtml(issue.status) + '">' +
                 '<td>' + statusBadge + '</td>' +
-                '<td><span class="issue-id">' + escapeHtml(issue.id) + '</span></td>' +
+                '<td><span class="issue-id">' + linkify(issue.id) + '</span></td>' +
                 '<td class="tracked-issue-title">' + escapeHtml(issue.title) + '</td>' +
                 '<td class="tracked-issue-assignee">' + escapeHtml(assignee) + '</td>' +
                 '<td class="tracked-issue-progress">' + progress + '</td>' +
@@ -3241,5 +3259,9 @@
         html += '</div>';
         cell.innerHTML = html;
     }
+
+    // Expose detail functions for linkify onclick handlers
+    window.openIssueDetail = openIssueDetail;
+    window.openConvoyDetail = openConvoyDetail;
 
 })();

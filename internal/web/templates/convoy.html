@@ -155,7 +155,7 @@
                                         {{end}}
                                     </td>
                                     <td>
-                                        <span class="convoy-id">{{.ID}}</span>
+                                        <span class="convoy-id">{{linkify .ID}}</span>
                                         {{if .Title}}<div class="convoy-title">{{.Title}}</div>{{end}}
                                         {{if .Assignees}}<div class="convoy-assignees">{{range .Assignees}}<span class="assignee-chip">{{.}}</span>{{end}}</div>{{end}}
                                     </td>
@@ -321,7 +321,7 @@
                                 <td>{{if .TargetBranch}}{{if ne .TargetBranch "main"}}<span class="badge badge-yellow">{{.TargetBranch}}</span>{{else}}main{{end}}{{else}}—{{end}}</td>
                                 <td class="polecat-issue">
                                     {{if .IssueID}}
-                                    <span class="issue-id">{{.IssueID}}</span>
+                                    <span class="issue-id">{{linkify .IssueID}}</span>
                                     <span class="issue-title">{{.IssueTitle}}</span>
                                     {{else}}
                                     <span class="no-issue">—</span>
@@ -447,7 +447,7 @@
                             <div class="tl-content">
                                 <div class="tl-header">
                                     <span class="tl-icon">{{.Icon}}</span>
-                                    <span class="tl-summary">{{.Summary}}</span>
+                                    <span class="tl-summary">{{linkify .Summary}}</span>
                                 </div>
                                 <div class="tl-meta">
                                     {{if .Actor}}<span class="tl-badge tl-badge-agent">{{.Actor}}</span>{{end}}
@@ -705,7 +705,7 @@
                                     {{else}}<span class="badge badge-muted">LOW</span>{{end}}
                                 </td>
                                 <td>
-                                    <span class="severity-{{.Severity}}">{{.Title}}</span>
+                                    <span class="severity-{{.Severity}}">{{linkify .Title}}</span>
                                     {{if .Acked}}<span class="badge badge-cyan" style="margin-left: 4px;">ACK</span>{{end}}
                                 </td>
                                 <td>{{.EscalatedBy}}</td>
@@ -950,7 +950,7 @@
                                         {{else if eq .Priority 3}}<span class="badge badge-yellow">P3</span>
                                         {{else}}<span class="badge badge-muted">P4</span>{{end}}
                                     </td>
-                                    <td><span class="issue-id">{{.ID}}</span></td>
+                                    <td><span class="issue-id">{{linkify .ID}}</span></td>
                                     <td class="issue-title">{{.Title}}</td>
                                     <td class="issue-status">
                                         {{if .Assignee}}<span class="badge badge-blue" title="{{.Assignee}}">{{.Assignee}}</span>{{else}}<span class="badge badge-green">Ready</span>{{end}}
@@ -1035,7 +1035,7 @@
                         <tbody>
                             {{range .Hooks}}
                             <tr class="{{if .IsStale}}hook-stale{{end}}">
-                                <td><span class="hook-id">{{.ID}}</span></td>
+                                <td><span class="hook-id">{{linkify .ID}}</span></td>
                                 <td class="hook-title">{{.Title}}</td>
                                 <td class="hook-agent">{{.Agent}}</td>
                                 <td class="hook-age">

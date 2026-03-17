@@ -93,7 +93,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/tour", async (_req, reply) => {
-    const html = await withLayout("Tour", placeholder("Tour"), "/tour");
+    const html = await withLayout("Tour", renderTourPage(), "/tour");
     return reply.type("text/html").send(html);
   });
 

@@ -9,6 +9,7 @@ import { renderPipelinePage } from "./pages/pipeline.js";
 import { registerMayorApi } from "./api/mayor.js";
 import { renderRigPage } from "./pages/rig.js";
 import { renderConvoyPage } from "./pages/convoy.js";
+import { renderBeadPage } from "./pages/bead.js";
 import { registerPipelineApi } from "./api/pipeline.js";
 import { renderAgentsPage, renderAgentDetailPage } from "./pages/agents.js";
 import { registerAgentsApi } from "./api/agents.js";
@@ -115,7 +116,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     "/bead/:id",
     async (req, reply) => {
       const id = req.params.id;
-      const html = await withLayout(`Bead: ${id}`, placeholder(`Bead: ${id}`));
+      const content = await renderBeadPage(id);
+      const html = await withLayout(`Bead: ${id}`, content);
       return reply.type("text/html").send(html);
     }
   );

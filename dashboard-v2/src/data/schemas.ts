@@ -80,6 +80,13 @@ export const BeadDetailSchema = BeadSchema.extend({
 });
 export type BeadDetail = z.infer<typeof BeadDetailSchema>;
 
+// --- Bead History (from bd history --json) ---
+export interface BeadHistoryEntry {
+  date: string;
+  committer: string;
+  status: string;
+}
+
 // --- Convoy ---
 export const ConvoySchema = z.object({
   id: z.string(),

@@ -1,7 +1,7 @@
 import { config } from "../config.js";
 import { exec } from "./exec.js";
 import { getSessionOutput } from "./terminal.js";
-import type { Agent } from "./schemas.js";
+import type { Agent, AgentWorkHistoryEntry } from "./schemas.js";
 
 const SYSTEM_ROLES = new Map<string, Agent["role"]>([
   ["mayor", "mayor"],
@@ -169,4 +169,61 @@ export async function getAgentPreview(sessionName: string, lines = 5): Promise<s
 
 export async function getAgentOutput(sessionName: string, lines = 20): Promise<string> {
   return getSessionOutput(sessionName, lines);
+}
+
+export async function getAgentSessionInfo(
+  sessionName: string
+): Promise<{ pid?: number; workingDir?: string; gitBranch?: string }> {
+  try {
+    const result = await exec(
+      "tmux",
+      ["list-panes", "-t", sessionName, "-F", "#{pane_pid}:#{pane_current_path}"],
+      { timeoutMs: 5_000 }
+    );
+    const line = result.stdout.trim().split("\n")[0];
+    if (!line) return {};
+    const colonIdx = line.indexOf(":");
+    const pid = colonIdx > 0 ? Number(line.slice(0, colonIdx)) : undefined;
+    const workingDir = colonIdx > 0 ? line.slice(colonIdx + 1) : undefined;
+
+    let gitBranch: string | undefined;
+    if (workingDir) {
+      try {
+        const br = await exec(
+          "git",
+          ["-C", workingDir, "branch", "--show-current"],
+          { timeoutMs: 3_000 }
+        );
+        gitBranch = br.stdout.trim() || undefined;
+      } catch { /* not a git dir */ }
+    }
+    return { pid: pid && !isNaN(pid) ? pid : undefined, workingDir, gitBranch };
+  } catch {
+    return {};
+  }
+}
+
+export async function getAgentWorkHistory(
+  agentPath: string,
+  rigName: string
+): Promise<AgentWorkHistoryEntry[]> {
+  try {
+    const result = await exec(
+      "bd",
+      ["list", "--rig", rigName, "--assignee", agentPath, "--status=closed", "--json"],
+      { timeoutMs: 10_000 }
+    );
+    const items = JSON.parse(result.stdout);
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((b: { id?: string; title?: string; closed_at?: string }) => ({
+        id: b.id ?? "",
+        title: b.title ?? "",
+        closedAt: b.closed_at ?? "",
+      }))
+      .filter((e: AgentWorkHistoryEntry) => e.id && !e.title.startsWith("🤝 HANDOFF"))
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
 }

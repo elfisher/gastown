@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { listRigs } from "./data/rigs.js";
 import { getMayorMessages } from "./data/mayor.js";
 import { getPipelineData } from "./data/pipeline.js";
-import { listAgents, getAgentPreview, getAgentOutput } from "./data/agents.js";
+import { listAgents, getAgentPreview, getAgentOutput, getAgentSessionInfo, getAgentWorkHistory } from "./data/agents.js";
 import { listConvoys } from "./data/convoys.js";
 import { renderLayout } from "./pages/layout.js";
 import { renderMayorPage } from "./pages/mayor.js";
@@ -179,9 +179,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).type("text/html").send(html);
       }
       const output = await getAgentOutput(sessionName, 20);
+      const sessionInfo = await getAgentSessionInfo(sessionName);
+      Object.assign(agent, sessionInfo);
+      const agentPath = `${agent.rig}/${agent.role === "polecat" ? "polecats" : agent.role === "crew" ? "crew" : agent.role}/${agent.name}`;
+      const workHistory = await getAgentWorkHistory(agentPath, agent.rig);
       const html = await withLayout(
         `Agent: ${agent.name}`,
-        renderAgentDetailPage(agent, output),
+        renderAgentDetailPage(agent, output, workHistory),
         "/agents"
       );
       return reply.type("text/html").send(html);

@@ -24,6 +24,9 @@ export const AgentSchema = z.object({
   lastActivity: z.string(),
   currentWork: z.string().optional(),
   preview: z.string().optional(),
+  pid: z.number().optional(),
+  workingDir: z.string().optional(),
+  gitBranch: z.string().optional(),
 });
 
 export const AgentListSchema = z.array(AgentSchema);
@@ -79,6 +82,20 @@ export const BeadDetailSchema = BeadSchema.extend({
   dependents: z.array(BeadDepSchema).optional(),
 });
 export type BeadDetail = z.infer<typeof BeadDetailSchema>;
+
+// --- Agent Work History ---
+export interface AgentWorkHistoryEntry {
+  id: string;
+  title: string;
+  closedAt: string;
+}
+
+// --- Bead History (from bd history --json) ---
+export interface BeadHistoryEntry {
+  date: string;
+  committer: string;
+  status: string;
+}
 
 // --- Convoy ---
 export const ConvoySchema = z.object({

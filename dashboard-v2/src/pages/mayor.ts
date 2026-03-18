@@ -57,7 +57,7 @@ export function renderMayorPage(messages: MayorMessage[]): string {
     <div id="mayor-messages"
          class="flex-1 overflow-y-auto space-y-1 p-4 bg-base-200 rounded-box"
          hx-get="/api/mayor/messages"
-         hx-trigger="every 5s"
+         hx-trigger="every 5s, refresh-messages from:body"
          hx-swap="innerHTML scroll:bottom"
          hx-on::after-settle="this.scrollTop = this.scrollHeight">
       ${renderMessages(messages)}
@@ -72,7 +72,7 @@ export function renderMayorPage(messages: MayorMessage[]): string {
     <form class="mt-4 flex gap-2"
           hx-post="/api/mayor/nudge"
           hx-swap="none"
-          hx-on::after-request="this.reset(); htmx.trigger('#mayor-messages', 'htmx:trigger')">
+          hx-on::after-request="this.reset(); htmx.trigger(document.body, 'refresh-messages')">
       <input type="text" name="message"
              placeholder="Send a message to the Mayor..."
              class="input input-bordered flex-1"

@@ -29,6 +29,21 @@ function beadProgress(beads: Bead[]): { total: number; closed: number; hooked: n
   return { total: beads.length, closed, hooked };
 }
 
+/** Get IDs of beads that depend on a given epic (its children). */
+async function getEpicChildIds(epicId: string, root: string): Promise<string[]> {
+  try {
+    const { stdout } = await exec("bd", ["show", epicId, "--json"], {
+      cwd: root,
+      timeoutMs: 10_000,
+    });
+    const detail = JSON.parse(stdout);
+    const dependents: { id: string }[] = detail.dependents ?? [];
+    return dependents.map((d) => d.id);
+  } catch {
+    return [];
+  }
+}
+
 export async function getProjectsData(filters?: {
   search?: string;
   status?: string;
@@ -48,6 +63,8 @@ export async function getProjectsData(filters?: {
     allBeads = [];
   }
 
+  const beadMap = new Map(allBeads.map((b) => [b.id, b]));
+
   // Filter out internal wisps and agent beads for child listing
   const workBeads = allBeads.filter(
     (b) =>
@@ -56,7 +73,7 @@ export async function getProjectsData(filters?: {
       b.issue_type !== "epic"
   );
 
-  // Get epics
+  // Get epics (exclude internal wisps)
   const epics = allBeads.filter(
     (b) => b.issue_type === "epic" && !b.id.includes("-wisp-")
   );
@@ -91,17 +108,18 @@ export async function getProjectsData(filters?: {
   // Build epic-based projects (only if not already covered by a convoy)
   for (const epic of epics) {
     if (convoyBeadIds.has(epic.id)) continue;
-    // Find children: beads that depend on this epic (heuristic: same prefix, matching labels)
-    // For now, show the epic itself as a project with no children
+    const childIds = await getEpicChildIds(epic.id, root);
+    const children = childIds
+      .map((id) => beadMap.get(id))
+      .filter((b): b is Bead => b !== undefined);
+    const prog = beadProgress(children);
     projects.push({
       id: epic.id,
       name: epic.title,
       type: "epic",
       status: epic.status,
-      beads: [],
-      total: 0,
-      closed: 0,
-      hooked: 0,
+      beads: children,
+      ...prog,
     });
   }
 

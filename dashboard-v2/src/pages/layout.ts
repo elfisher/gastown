@@ -12,7 +12,7 @@ export function renderLayout(
     { href: "/convoys", label: "Convoys", icon: "🚚" },
     { href: "/agents", label: "Agents", icon: "🤖" },
     { href: "/mayor", label: "Mayor", icon: "🎩" },
-    { href: "/overview", label: "Project Overview", icon: "📋" },
+    { href: "/projects", label: "Projects", icon: "📋" },
     { href: "/tour", label: "Tour", icon: "🗺️" },
   ];
 

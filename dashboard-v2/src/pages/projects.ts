@@ -44,6 +44,9 @@ function renderBeadRow(bead: Bead): string {
 function renderProjectCard(project: ProjectItem): string {
   const typeIcon = project.type === "convoy" ? "🚚" : "📋";
   const detailId = `proj-${project.id.replace(/[^a-zA-Z0-9]/g, "-")}`;
+  const detailLink = project.type === "convoy"
+    ? `/convoy/${encodeURIComponent(project.id)}`
+    : `/bead/${encodeURIComponent(project.id)}`;
 
   const beadTable =
     project.beads.length === 0
@@ -61,7 +64,7 @@ function renderProjectCard(project: ProjectItem): string {
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <span>${typeIcon}</span>
-          <span class="font-bold">${escapeHtml(project.name)}</span>
+          <a href="${detailLink}" class="font-bold link link-hover">${escapeHtml(project.name)}</a>
           <span class="font-mono text-xs text-base-content/50">${escapeHtml(project.id)}</span>
         </div>
         ${statusBadge(project.status)}
@@ -80,12 +83,25 @@ function renderProjectCard(project: ProjectItem): string {
   </div>`;
 }
 
-function renderFilterBar(activeSearch?: string, activeStatus?: string): string {
+function renderFilterBar(activeSearch?: string, activeStatus?: string, activePriority?: string): string {
   const statuses = ["active", "completed", "pending"];
   const statusOpts = statuses
     .map(
       (s) =>
         `<option value="${s}" ${s === activeStatus ? "selected" : ""}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`
+    )
+    .join("");
+
+  const priorities = [
+    { value: "0", label: "P0 Critical" },
+    { value: "1", label: "≤ P1 High" },
+    { value: "2", label: "≤ P2 Medium" },
+    { value: "3", label: "≤ P3 Low" },
+  ];
+  const priorityOpts = priorities
+    .map(
+      (p) =>
+        `<option value="${p.value}" ${p.value === activePriority ? "selected" : ""}>${p.label}</option>`
     )
     .join("");
 
@@ -96,9 +112,15 @@ function renderFilterBar(activeSearch?: string, activeStatus?: string): string {
            oninput="(function(v){document.querySelectorAll('[data-search]').forEach(function(c){c.style.display=c.dataset.search.includes(v)?'':'none'})})(this.value.toLowerCase())" />
     <select name="status" class="select select-bordered select-sm"
             hx-get="/api/projects" hx-target="#projects-content" hx-swap="innerHTML"
-            hx-include="[name='search']">
+            hx-include="[name='search'],[name='priority']">
       <option value="">All statuses</option>
       ${statusOpts}
+    </select>
+    <select name="priority" class="select select-bordered select-sm"
+            hx-get="/api/projects" hx-target="#projects-content" hx-swap="innerHTML"
+            hx-include="[name='search'],[name='status']">
+      <option value="">All priorities</option>
+      ${priorityOpts}
     </select>
   </div>`;
 }
@@ -115,17 +137,18 @@ export function renderProjectsContent(data: ProjectsData): string {
 export function renderProjectsPage(
   data: ProjectsData,
   activeSearch?: string,
-  activeStatus?: string
+  activeStatus?: string,
+  activePriority?: string
 ): string {
   return `<div>
     <div class="flex items-center justify-between mb-4">
       <h1 class="text-2xl font-bold">📋 Project Overview</h1>
       <span class="badge badge-sm badge-ghost">${data.total} projects</span>
     </div>
-    ${renderFilterBar(activeSearch, activeStatus)}
+    ${renderFilterBar(activeSearch, activeStatus, activePriority)}
     <div id="projects-content" class="mt-4"
          hx-get="/api/projects" hx-trigger="every 15s"
-         hx-swap="innerHTML" hx-include="[name='search'],[name='status']">
+         hx-swap="innerHTML" hx-include="[name='search'],[name='status'],[name='priority']">
       ${renderProjectsContent(data)}
     </div>
   </div>`;

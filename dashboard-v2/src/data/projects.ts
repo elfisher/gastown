@@ -91,17 +91,30 @@ export async function getProjectsData(filters?: {
   // Build epic-based projects (only if not already covered by a convoy)
   for (const epic of epics) {
     if (convoyBeadIds.has(epic.id)) continue;
-    // Find children: beads that depend on this epic (heuristic: same prefix, matching labels)
-    // For now, show the epic itself as a project with no children
+    // Find children: beads whose dependencies include this epic
+    let children: Bead[] = [];
+    try {
+      const { stdout } = await exec(
+        "bd",
+        ["show", epic.id, "--json"],
+        { cwd: root, timeoutMs: 10_000 }
+      );
+      const detail = JSON.parse(stdout);
+      const depIds: string[] = (detail.dependents ?? []).map(
+        (d: { id: string }) => d.id
+      );
+      children = workBeads.filter((b) => depIds.includes(b.id));
+    } catch {
+      // fallback: no children
+    }
+    const prog = beadProgress(children);
     projects.push({
       id: epic.id,
       name: epic.title,
       type: "epic",
       status: epic.status,
-      beads: [],
-      total: 0,
-      closed: 0,
-      hooked: 0,
+      beads: children,
+      ...prog,
     });
   }
 

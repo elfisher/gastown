@@ -394,6 +394,18 @@ type ProcessResult struct {
 
 // doMerge performs the actual git merge operation.
 func (e *Engineer) doMerge(ctx context.Context, branch, target, sourceIssue string, skipGates ...bool) ProcessResult {
+	// GH#2778: Check no_merge flag on source issue before merging. The polecat
+	// normally skips MR creation when no_merge is set, but if an MR is created
+	// manually (e.g., gh pr create) the refinery would otherwise auto-merge it.
+	if sourceIssue != "" {
+		if si, err := e.beads.Show(sourceIssue); err == nil && si != nil {
+			if af := beads.ParseAttachmentFields(si); af != nil && af.NoMerge {
+				_, _ = fmt.Fprintf(e.output, "[Engineer] Source issue %s has no_merge=true — skipping merge\n", sourceIssue)
+				return ProcessResult{Error: "no_merge flag set on source issue"}
+			}
+		}
+	}
+
 	// Step 1: Verify source branch exists locally (shared .repo.git with polecats)
 	_, _ = fmt.Fprintf(e.output, "[Engineer] Checking local branch %s...\n", branch)
 	exists, err := e.git.BranchExists(branch)
@@ -1053,6 +1065,15 @@ func (e *Engineer) HandleMRInfoFailure(mr *MRInfo, result ProcessResult) {
 		_, _ = fmt.Fprintf(e.output, "[Engineer] Nudged %s about merge failure (%s)\n", polecatName, failureType)
 	}
 
+	// Nudge mayor about merge failure so dispatcher can unblock or reassign
+	// dependent work immediately. Mirrors the success nudge in HandleMRInfoSuccess.
+	mayorMsg := fmt.Sprintf("MERGE_FAILED: %s issue=%s branch=%s type=%s", mr.ID, mr.SourceIssue, mr.Branch, failureType)
+	mayorCmd := exec.Command("gt", "nudge", "mayor/", mayorMsg)
+	mayorCmd.Dir = e.workDir
+	if err := mayorCmd.Run(); err != nil {
+		_, _ = fmt.Fprintf(e.output, "[Engineer] Warning: failed to nudge mayor about merge failure: %v\n", err)
+	}
+
 	// If this was a conflict, create a conflict-resolution task for dispatch
 	// and block the MR until the task is resolved (non-blocking delegation)
 	if result.Conflict {
@@ -1327,6 +1348,11 @@ func (e *Engineer) ListReadyMRs() ([]*MRInfo, error) {
 			continue // Skip issues without MR fields
 		}
 
+		// Filter by rig — wisps are shared across all rigs (GH#2718).
+		if fields.Rig != "" && !strings.EqualFold(fields.Rig, e.rig.Name) {
+			continue
+		}
+
 		// Skip if already assigned, unless claim is stale (allows re-claim after crash).
 		// NOTE: Only one refinery runs per rig (enforced by ErrAlreadyRunning in
 		// manager.go), so concurrent re-claim race conditions are not a concern.
@@ -1383,6 +1409,11 @@ func (e *Engineer) ListBlockedMRs() ([]*MRInfo, error) {
 			continue
 		}
 
+		// Filter by rig — wisps are shared across all rigs (GH#2718).
+		if fields.Rig != "" && !strings.EqualFold(fields.Rig, e.rig.Name) {
+			continue
+		}
+
 		mr := issueToMRInfo(issue, fields)
 		mr.BlockedBy = blockedBy
 		mrs = append(mrs, mr)
@@ -1417,6 +1448,11 @@ func (e *Engineer) ListAllOpenMRs() ([]*MRInfo, error) {
 			continue
 		}
 
+		// Filter by rig — wisps are shared across all rigs (GH#2718).
+		if fields.Rig != "" && !strings.EqualFold(fields.Rig, e.rig.Name) {
+			continue
+		}
+
 		mr := issueToMRInfo(issue, fields)
 
 		// Check branch existence (local + remote tracking refs)
@@ -1442,7 +1478,17 @@ func (e *Engineer) ListQueueAnomalies(now time.Time) ([]*MRAnomaly, error) {
 		return nil, fmt.Errorf("querying beads for merge-requests: %w", err)
 	}
 
-	return detectQueueAnomalies(issues, now, e.config.StaleClaimWarningAfter, func(branch string) (bool, bool, error) {
+	// Filter by rig — wisps are shared across all rigs (GH#2718).
+	filtered := make([]*beads.Issue, 0, len(issues))
+	for _, issue := range issues {
+		fields := beads.ParseMRFields(issue)
+		if fields != nil && fields.Rig != "" && !strings.EqualFold(fields.Rig, e.rig.Name) {
+			continue
+		}
+		filtered = append(filtered, issue)
+	}
+
+	return detectQueueAnomalies(filtered, now, e.config.StaleClaimWarningAfter, func(branch string) (bool, bool, error) {
 		localExists, err := e.git.BranchExists(branch)
 		if err != nil {
 			return false, false, err
@@ -1603,7 +1649,7 @@ type convoyInfo struct {
 // are complete. Returns the list of convoys that were closed.
 func (e *Engineer) checkAndCloseCompletedConvoys(townRoot, townBeads string) []convoyInfo {
 	// List all open convoys
-	listCmd := exec.Command("bd", "list", "--type=convoy", "--status=open", "--json", "--flat")
+	listCmd := exec.Command("bd", "list", "--type=convoy", "--status=open", "--json")
 	listCmd.Dir = townBeads
 	var stdout bytes.Buffer
 	listCmd.Stdout = &stdout

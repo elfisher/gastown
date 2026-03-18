@@ -146,6 +146,14 @@ type AgentPresetInfo struct {
 	// the queue and inject via tmux.
 	HasTurnBoundaryDrain bool `json:"has_turn_boundary_drain,omitempty"`
 
+	// EscapeCancelsRequest indicates that sending an Escape keystroke to this
+	// agent cancels its in-flight generation. NudgeSession normally sends
+	// Escape (step 5) to exit vim INSERT mode — harmless for bash/Claude Code,
+	// but destructive for agents like Gemini CLI where Escape aborts the
+	// active request. When true, NudgeSessionWithOpts skips the Escape
+	// keystroke and the 600ms readline timeout that follows it.
+	EscapeCancelsRequest bool `json:"escape_cancels_request,omitempty"`
+
 	// CompactCommand is the slash command to compact the agent's context.
 	// Sent via tmux send-keys when context usage exceeds CompactThreshold.
 	// For Kiro: "/compact". Empty means the agent doesn't support compaction.
@@ -261,8 +269,9 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 		HooksProvider:     "gemini",
 		HooksDir:          ".gemini",
 		HooksSettingsFile: "settings.json",
-		ReadyDelayMs:      5000,
-		InstructionsFile:  "AGENTS.md",
+		ReadyDelayMs:         5000,
+		InstructionsFile:     "AGENTS.md",
+		EscapeCancelsRequest: true, // Gemini CLI uses Escape to abort active generation
 	},
 	AgentCodex: {
 		Name:                AgentCodex,

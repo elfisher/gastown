@@ -31,7 +31,23 @@ const NOISE_PATTERNS = [
   /^\s*<button /,
   /^\s*<span /,
   /^\s*<time /,
+  // CLI noise: commands that leak from other processes or recursive captures
+  /^\s*\$\s+(curl|gt\s+nudge|gt\s+mail|tmux|docker)\b/,
+  /^\s*curl\s+(-[sS]|--silent|http)/,
+  /^\s*gt\s+nudge\s+mayor\b/,
+  // ANSI escape sequences
+  /\x1b\[[0-9;]*[a-zA-Z]/,
+  // tmux status/control lines
+  /^\s*%begin\b|^\s*%end\b|^\s*%output\b/,
+  // HTTP response fragments from curl
+  /^\s*\{?"ok"\s*:\s*(true|false)/,
+  /^\s*HTTP\/[12]/,
 ];
+
+/** Strip ANSI escape sequences from a line. */
+function stripAnsi(line: string): string {
+  return line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+}
 
 function isNoiseLine(line: string): boolean {
   return NOISE_PATTERNS.some((p) => p.test(line));
@@ -79,6 +95,7 @@ async function tailLog(
     });
     const filtered = result.stdout
       .split("\n")
+      .map(stripAnsi)
       .filter((l) => !isNoiseLine(l));
     return filtered.slice(-lines).join("\n");
   } catch {
@@ -138,6 +155,7 @@ export async function getSessionLines(
     );
     return result.stdout
       .split("\n")
+      .map(stripAnsi)
       .filter((l) => l.trim() && !isNoiseLine(l));
   } catch {
     return [];

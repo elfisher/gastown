@@ -1855,3 +1855,79 @@ func eventSummary(eventType, actor string, payload map[string]interface{}) strin
 		return eventType
 	}
 }
+
+// digestWindow is the lookback period for the overnight digest.
+const digestWindow = 8 * time.Hour
+
+// digestMinEvents is the minimum number of events to show a digest.
+const digestMinEvents = 3
+
+// FetchDigest scans the events log for the last 8 hours and produces
+// an overnight activity summary.
+func (f *LiveConvoyFetcher) FetchDigest() (*DigestData, error) {
+	eventsPath := filepath.Join(f.townRoot, ".events.jsonl")
+
+	data, err := os.ReadFile(eventsPath)
+	if err != nil {
+		return nil, nil
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) == 0 {
+		return nil, nil
+	}
+
+	cutoff := time.Now().UTC().Add(-digestWindow)
+	d := &DigestData{Period: "last 8 hours"}
+
+	// Scan from the end for efficiency — stop when we pass the cutoff.
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if line == "" {
+			continue
+		}
+
+		var event struct {
+			Timestamp  string `json:"ts"`
+			Type       string `json:"type"`
+			Visibility string `json:"visibility"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+		if event.Visibility == "audit" {
+			continue
+		}
+
+		t, err := time.Parse(time.RFC3339, event.Timestamp)
+		if err != nil {
+			continue
+		}
+		if t.Before(cutoff) {
+			break
+		}
+
+		d.TotalEvents++
+		switch event.Type {
+		case "merged":
+			d.MergesLanded++
+		case "merge_failed":
+			d.MergeFails++
+		case "done":
+			d.WorkDone++
+		case "spawn":
+			d.Spawns++
+		case "session_death", "mass_death":
+			d.Deaths++
+		case "escalation_sent":
+			d.Escalations++
+		case "mail":
+			d.MailSent++
+		case "sling":
+			d.Slings++
+		}
+	}
+
+	d.Available = d.TotalEvents >= digestMinEvents
+	return d, nil
+}

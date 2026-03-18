@@ -115,6 +115,28 @@
         </div>
         {{end}}
 
+        <!-- Morning Digest Banner -->
+        {{if .Digest}}{{if .Digest.Available}}
+        <div class="digest-banner" id="digest-banner">
+            <div class="digest-header">
+                <span class="digest-title">☀️ Overnight Digest <span class="digest-period">({{.Digest.Period}})</span></span>
+                <button class="digest-dismiss" onclick="sessionStorage.setItem('digest-dismissed','1');this.closest('.digest-banner').remove()" aria-label="Dismiss digest">✕</button>
+            </div>
+            <div class="digest-stats">
+                {{if .Digest.MergesLanded}}<span class="digest-stat digest-good">✨ {{.Digest.MergesLanded}} merged</span>{{end}}
+                {{if .Digest.WorkDone}}<span class="digest-stat digest-good">✅ {{.Digest.WorkDone}} completed</span>{{end}}
+                {{if .Digest.Slings}}<span class="digest-stat digest-neutral">🎯 {{.Digest.Slings}} slung</span>{{end}}
+                {{if .Digest.Spawns}}<span class="digest-stat digest-neutral">🦨 {{.Digest.Spawns}} spawned</span>{{end}}
+                {{if .Digest.MailSent}}<span class="digest-stat digest-neutral">📬 {{.Digest.MailSent}} mail</span>{{end}}
+                {{if .Digest.MergeFails}}<span class="digest-stat digest-warn">❌ {{.Digest.MergeFails}} merge failures</span>{{end}}
+                {{if .Digest.Deaths}}<span class="digest-stat digest-warn">☠️ {{.Digest.Deaths}} crashes</span>{{end}}
+                {{if .Digest.Escalations}}<span class="digest-stat digest-warn">⚠️ {{.Digest.Escalations}} escalations</span>{{end}}
+            </div>
+            <div class="digest-total">{{.Digest.TotalEvents}} events total</div>
+        </div>
+        <script>if(sessionStorage.getItem('digest-dismissed')){var d=document.getElementById('digest-banner');if(d)d.remove()}</script>
+        {{end}}{{end}}
+
         <div class="panels">
             <!-- Row 1: Convoys, Polecats, Sessions -->
 

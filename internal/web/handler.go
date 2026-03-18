@@ -35,6 +35,7 @@ type ConvoyFetcher interface {
 	FetchMayor() (*MayorStatus, error)
 	FetchIssues() ([]IssueRow, error)
 	FetchActivity() ([]ActivityRow, error)
+	FetchDigest() (*DigestData, error)
 }
 
 // ConvoyHandler handles HTTP requests for the convoy dashboard.
@@ -84,11 +85,12 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mayor       *MayorStatus
 		issues      []IssueRow
 		activity    []ActivityRow
+		digest      *DigestData
 		wg          sync.WaitGroup
 	)
 
 	// Run all fetches in parallel with error logging
-	wg.Add(14)
+	wg.Add(15)
 
 	go func() {
 		defer wg.Done()
@@ -202,6 +204,14 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Printf("dashboard: FetchActivity failed: %v", err)
 		}
 	}()
+	go func() {
+		defer wg.Done()
+		var err error
+		digest, err = h.fetcher.FetchDigest()
+		if err != nil {
+			log.Printf("dashboard: FetchDigest failed: %v", err)
+		}
+	}()
 
 	// Wait for fetches or timeout
 	done := make(chan struct{})
@@ -239,6 +249,7 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Issues:      enrichIssuesWithAssignees(issues, hooks),
 		Activity:    activity,
 		Summary:     summary,
+		Digest:      digest,
 		Expand:      expandPanel,
 		CSRFToken:   h.csrfToken,
 	}

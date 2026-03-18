@@ -91,6 +91,10 @@ func (m *MockConvoyFetcher) FetchActivity() ([]ActivityRow, error) {
 	return m.Activity, nil
 }
 
+func (m *MockConvoyFetcher) FetchDigest() (*DigestData, error) {
+	return nil, nil
+}
+
 func TestConvoyHandler_RendersTemplate(t *testing.T) {
 	mock := &MockConvoyFetcher{
 		Convoys: []ConvoyRow{
@@ -1057,6 +1061,10 @@ func (m *MockConvoyFetcherWithErrors) FetchIssues() ([]IssueRow, error) {
 }
 
 func (m *MockConvoyFetcherWithErrors) FetchActivity() ([]ActivityRow, error) {
+	return nil, nil
+}
+
+func (m *MockConvoyFetcherWithErrors) FetchDigest() (*DigestData, error) {
 	return nil, nil
 }
 

@@ -30,6 +30,7 @@ type ConvoyData struct {
 	Issues      []IssueRow
 	Activity    []ActivityRow
 	Summary     *DashboardSummary
+	Digest      *DigestData
 	Expand      string // Panel to show fullscreen (from ?expand=name)
 	CSRFToken   string // Token for CSRF protection on POST requests
 }
@@ -134,6 +135,21 @@ type ActivityRow struct {
 	Rig          string // Rig name extracted from actor (e.g., "gastown")
 	Summary      string // Human-readable description
 	RawTimestamp string // ISO 8601 timestamp for JS sorting/filtering
+}
+
+// DigestData provides an overnight activity summary for returning users.
+type DigestData struct {
+	Available    bool   // Whether there's meaningful overnight activity
+	Period       string // e.g., "last 8 hours"
+	MergesLanded int    // Branches merged to main
+	MergeFails   int    // Merge failures
+	WorkDone     int    // Beads completed (done events)
+	Spawns       int    // Polecats spawned
+	Deaths       int    // Session deaths
+	Escalations  int    // Escalations sent
+	MailSent     int    // Mail messages sent
+	Slings       int    // Work items slung to agents
+	TotalEvents  int    // Total events in the period
 }
 
 // DashboardSummary provides at-a-glance stats and alerts.

@@ -27,33 +27,35 @@
             </div>
         </header>
 
-        <!-- Mayor Status Banner -->
-        <div class="mayor-banner {{if .Mayor}}{{if .Mayor.IsAttached}}attached{{else}}detached{{end}}{{else}}detached{{end}}">
-            <div class="mayor-info">
-                <span class="mayor-icon">🎩</span>
-                <span class="mayor-title">The Mayor</span>
-                {{if .Mayor}}
-                    {{if .Mayor.IsAttached}}
-                    <span class="badge badge-green">Attached</span>
+        <!-- Mayor Terminal Panel -->
+        <div class="mayor-panel {{if .Mayor}}{{if .Mayor.IsAttached}}attached{{else}}detached{{end}}{{else}}detached{{end}}">
+            <div class="mayor-panel-header">
+                <div class="mayor-info">
+                    <span class="mayor-icon">🎩</span>
+                    <span class="mayor-title">The Mayor</span>
+                    {{if .Mayor}}
+                        {{if .Mayor.IsAttached}}
+                        <span class="badge badge-green">Attached</span>
+                        {{else}}
+                        <span class="badge badge-muted">Detached</span>
+                        {{end}}
                     {{else}}
-                    <span class="badge badge-muted">Detached</span>
+                    <span class="badge badge-muted">Unknown</span>
                     {{end}}
-                {{else}}
-                <span class="badge badge-muted">Unknown</span>
-                {{end}}
-            </div>
-            {{if .Mayor}}{{if .Mayor.IsAttached}}
-            <div class="mayor-status">
-                <div class="mayor-stat">
-                    <span class="mayor-stat-label">Activity</span>
+                </div>
+                <div class="mayor-status">
+                    {{if .Mayor}}{{if .Mayor.IsAttached}}
                     <span class="mayor-stat-value {{if .Mayor.IsActive}}active{{else}}idle{{end}}">
                         {{.Mayor.LastActivity}}
                     </span>
-                </div>
-                <div class="mayor-stat">
-                    <span class="mayor-stat-label">Runtime</span>
                     <span class="mayor-stat-value">{{.Mayor.Runtime}}</span>
+                    {{end}}{{end}}
+                    <span id="mayor-terminal-status" class="mayor-terminal-status"></span>
                 </div>
+            </div>
+            {{if .Mayor}}{{if .Mayor.IsAttached}}
+            <div class="mayor-terminal" id="mayor-terminal">
+                <pre id="mayor-terminal-content" class="mayor-terminal-content" data-session="{{.Mayor.SessionName}}">Loading...</pre>
             </div>
             {{end}}{{end}}
         </div>

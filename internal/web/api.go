@@ -2017,12 +2017,59 @@ func (h *APIHandler) handleSessionPreview(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	content := filterTerminalNoise(stdout.String())
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(SessionPreviewResponse{
 		Session:   sessionName,
-		Content:   stdout.String(),
+		Content:   content,
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
+}
+
+// filterTerminalNoise strips THINKING spinner frames and other noise from
+// raw tmux capture-pane output so the dashboard shows meaningful content.
+func filterTerminalNoise(raw string) string {
+	lines := strings.Split(raw, "\n")
+	var filtered []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip spinner/thinking indicator lines
+		if isTerminalNoise(trimmed) {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	return strings.Join(filtered, "\n")
+}
+
+// isTerminalNoise returns true for lines that are spinner frames, thinking
+// indicators, or other transient terminal artifacts.
+func isTerminalNoise(line string) bool {
+	if line == "" {
+		return false
+	}
+	// Common spinner characters and thinking indicators
+	noisePatterns := []string{
+		"THINKING", "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏",
+		"◐", "◓", "◑", "◒", "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷",
+	}
+	for _, p := range noisePatterns {
+		if strings.Contains(line, p) {
+			// Don't filter if the line has substantial content beyond the noise
+			cleaned := strings.ReplaceAll(line, p, "")
+			if len(strings.TrimSpace(cleaned)) < 3 {
+				return true
+			}
+		}
+	}
+	// Lines that are ONLY whitespace + control chars (cursor movement artifacts)
+	for _, r := range line {
+		if r > 32 && r != 127 {
+			return false
+		}
+	}
+	return true
 }
 
 // parseCommandArgs splits a command string into args, respecting quotes.

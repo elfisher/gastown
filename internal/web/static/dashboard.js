@@ -3121,6 +3121,72 @@
     }
 
     // ============================================
+    // MAYOR TERMINAL VIEW
+    // ============================================
+    var mayorTerminalInterval = null;
+    var mayorTerminalUserScrolled = false;
+
+    function initMayorTerminal() {
+        var contentEl = document.getElementById('mayor-terminal-content');
+        if (!contentEl) return;
+
+        var sessionName = contentEl.getAttribute('data-session');
+        if (!sessionName) return;
+
+        // Track user scroll
+        contentEl.onscroll = function() {
+            var atBottom = contentEl.scrollHeight - contentEl.scrollTop - contentEl.clientHeight < 40;
+            mayorTerminalUserScrolled = !atBottom;
+        };
+
+        // Fetch immediately
+        fetchMayorTerminal(sessionName, contentEl);
+
+        // Auto-refresh every 3 seconds
+        if (mayorTerminalInterval) clearInterval(mayorTerminalInterval);
+        mayorTerminalInterval = setInterval(function() {
+            fetchMayorTerminal(sessionName, contentEl);
+        }, 3000);
+    }
+
+    function fetchMayorTerminal(sessionName, contentEl) {
+        var statusEl = document.getElementById('mayor-terminal-status');
+        fetch('/api/session/preview?session=' + encodeURIComponent(sessionName))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    contentEl.textContent = 'Error: ' + data.error;
+                    return;
+                }
+                contentEl.textContent = data.content || '(no output)';
+                if (!mayorTerminalUserScrolled) {
+                    contentEl.scrollTop = contentEl.scrollHeight;
+                }
+                if (statusEl) {
+                    var now = new Date();
+                    var timeStr = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes() + ':' + (now.getSeconds() < 10 ? '0' : '') + now.getSeconds();
+                    statusEl.textContent = '⟳ ' + timeStr;
+                }
+            })
+            .catch(function(err) {
+                contentEl.textContent = 'Failed to load: ' + err.message;
+            });
+    }
+
+    // Initialize on page load
+    initMayorTerminal();
+
+    // Re-initialize after htmx swaps (morph updates)
+    document.body.addEventListener('htmx:afterSwap', function() {
+        if (mayorTerminalInterval) {
+            clearInterval(mayorTerminalInterval);
+            mayorTerminalInterval = null;
+        }
+        mayorTerminalUserScrolled = false;
+        initMayorTerminal();
+    });
+
+    // ============================================
     // CONVOY DRILL-DOWN (expand rows to show tracked issues)
     // ============================================
     var convoyCache = {}; // Cache fetched convoy data by ID

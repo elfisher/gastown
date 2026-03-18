@@ -4,6 +4,9 @@
  * Uses `tmux pipe-pane` to capture session output to log files, then reads
  * the tail of those files.  Falls back to `capture-pane` when the log file
  * doesn't exist yet (first request bootstraps pipe-pane).
+ *
+ * All output is stripped of ANSI escape codes and filtered for common noise
+ * patterns (WARNING lines, HTML fragments, tool invocations).
  */
 
 import { existsSync, statSync } from "node:fs";
@@ -16,10 +19,19 @@ const LOG_DIR = join(config.townRoot, ".dashboard", "logs");
 /** Sessions we've already started pipe-pane for. */
 const pipedSessions = new Set<string>();
 
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[()][0-9A-B]|\x0f/g;
+
+/** Strip ANSI escape sequences from a string. */
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, "");
+}
+
 /** Noise patterns filtered from terminal output. */
 const NOISE_PATTERNS = [
   /^\s*$/,
   /^\s*[>%$#]\s*$/,
+  // HTML/htmx fragments (from dashboard self-capture)
   /hx-get=|hx-post=|hx-trigger=|hx-swap=/i,
   /class="chat |class="alert /,
   /chat-bubble|chat-start|chat-end/,
@@ -31,6 +43,17 @@ const NOISE_PATTERNS = [
   /^\s*<button /,
   /^\s*<span /,
   /^\s*<time /,
+  // Common CLI noise
+  /^WARNING: This binary was built with/,
+  /^\s*Use 'make build' to create a properly signed binary/,
+  /^\s*Run from:/,
+  // Tool invocation noise from other sessions
+  /^\s*\$ (curl|wget|tmux|gt feed|gt dashboard)\b/,
+  /^HTTP\/[12]/,
+  // tmux status line artifacts
+  /^\[\d+\]\s*$/,
+  // Bare control characters after ANSI stripping
+  /^[\x00-\x1f\x7f]+$/,
 ];
 
 function isNoiseLine(line: string): boolean {
@@ -38,7 +61,6 @@ function isNoiseLine(line: string): boolean {
 }
 
 function logPath(session: string): string {
-  // Sanitise session name for filesystem safety
   const safe = session.replace(/[^a-zA-Z0-9_-]/g, "_");
   return join(LOG_DIR, `${safe}.log`);
 }
@@ -61,14 +83,22 @@ async function ensurePipe(session: string): Promise<void> {
   }
 }
 
+/** Clean a block of raw terminal text: strip ANSI, filter noise. */
+function cleanLines(raw: string, maxLines: number): string[] {
+  return raw
+    .split("\n")
+    .map(stripAnsi)
+    .filter((l) => !isNoiseLine(l))
+    .slice(-maxLines);
+}
+
 /** Read the last N lines from a session's log file, filtering noise. */
 async function tailLog(
   session: string,
   lines: number,
-): Promise<string | null> {
+): Promise<string[] | null> {
   const path = logPath(session);
   if (!existsSync(path)) return null;
-  // Only read if file has content
   const stat = statSync(path);
   if (stat.size === 0) return null;
 
@@ -77,12 +107,23 @@ async function tailLog(
     const result = await exec("tail", ["-n", String(lines * 3), path], {
       timeoutMs: 3_000,
     });
-    const filtered = result.stdout
-      .split("\n")
-      .filter((l) => !isNoiseLine(l));
-    return filtered.slice(-lines).join("\n");
+    return cleanLines(result.stdout, lines);
   } catch {
     return null;
+  }
+}
+
+/** Fallback: capture-pane (first request before pipe-pane has written data). */
+async function capturePane(session: string, lines: number): Promise<string[]> {
+  try {
+    const result = await exec(
+      "tmux",
+      ["capture-pane", "-t", session, "-p", "-S", `-${lines * 2}`],
+      { timeoutMs: 5_000 },
+    );
+    return cleanLines(result.stdout, lines);
+  } catch {
+    return [];
   }
 }
 
@@ -97,26 +138,15 @@ export async function getSessionOutput(
 ): Promise<string> {
   await ensurePipe(session);
 
-  // Try log-based read first
   const fromLog = await tailLog(session, lines);
-  if (fromLog !== null) return fromLog;
+  if (fromLog !== null) return fromLog.join("\n");
 
-  // Fallback: capture-pane (first request before pipe-pane has written data)
-  try {
-    const result = await exec(
-      "tmux",
-      ["capture-pane", "-t", session, "-p", "-S", `-${lines}`],
-      { timeoutMs: 5_000 },
-    );
-    return result.stdout.trimEnd();
-  } catch {
-    return "(session not available)";
-  }
+  return (await capturePane(session, lines)).join("\n") || "(session not available)";
 }
 
 /**
- * Get terminal output for a session, with noise filtering and line grouping
- * suitable for the mayor chat view.
+ * Get terminal output as an array of cleaned lines, suitable for the mayor
+ * chat view and other structured consumers.
  */
 export async function getSessionLines(
   session: string,
@@ -125,21 +155,7 @@ export async function getSessionLines(
   await ensurePipe(session);
 
   const fromLog = await tailLog(session, lines);
-  if (fromLog !== null) {
-    return fromLog.split("\n").filter((l) => l.trim());
-  }
+  if (fromLog !== null) return fromLog.filter((l) => l.trim());
 
-  // Fallback
-  try {
-    const result = await exec(
-      "tmux",
-      ["capture-pane", "-t", session, "-p", "-S", `-${lines}`],
-      { timeoutMs: 5_000 },
-    );
-    return result.stdout
-      .split("\n")
-      .filter((l) => l.trim() && !isNoiseLine(l));
-  } catch {
-    return [];
-  }
+  return (await capturePane(session, lines)).filter((l) => l.trim());
 }

@@ -20,6 +20,7 @@ const pipedSessions = new Set<string>();
 const NOISE_PATTERNS = [
   /^\s*$/,
   /^\s*[>%$#]\s*$/,
+  // HTML fragments (recursive dashboard content in tmux capture)
   /hx-get=|hx-post=|hx-trigger=|hx-swap=/i,
   /class="chat |class="alert /,
   /chat-bubble|chat-start|chat-end/,
@@ -31,6 +32,20 @@ const NOISE_PATTERNS = [
   /^\s*<button /,
   /^\s*<span /,
   /^\s*<time /,
+  // CLI noise from other processes leaking into tmux
+  /^\s*curl\s/,
+  /^\s*wget\s/,
+  /^\s*% Total\s+% Received/,
+  /^\s*\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+/, // curl progress table rows
+  /^\s*HTTP\/[12]/,
+  /^\s*Content-Type:/i,
+  /^\s*Content-Length:/i,
+  /^\s*Connection:/i,
+  /^\s*Accept:/i,
+  /^\s*Host:/i,
+  // ANSI escape sequences (raw terminal control codes)
+  /^\s*\x1b\[[\d;]*[A-Za-z]/,
+  /^\s*\]\d+;/, // OSC sequences
 ];
 
 function isNoiseLine(line: string): boolean {

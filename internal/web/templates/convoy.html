@@ -69,20 +69,16 @@
                 </div>
                 {{end}}
                 <div class="stat">
-                    <span class="stat-value">{{.Summary.PolecatCount}}</span>
-                    <span class="stat-label">🦨 Polecats</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value">{{.Summary.HookCount}}</span>
-                    <span class="stat-label">🪝 Hooks</span>
+                    <span class="stat-value">{{.Summary.ConvoyCount}}</span>
+                    <span class="stat-label">🚚 Convoys</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value">{{.Summary.IssueCount}}</span>
                     <span class="stat-label">📋 Work</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-value">{{.Summary.ConvoyCount}}</span>
-                    <span class="stat-label">🚚 Convoys</span>
+                    <span class="stat-value">{{.Summary.PolecatCount}}</span>
+                    <span class="stat-label">🦨 Workers</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value">{{.Summary.EscalationCount}}</span>
@@ -114,6 +110,28 @@
             {{end}}
         </div>
         {{end}}
+
+        <!-- Morning Digest Banner -->
+        {{if .Digest}}{{if .Digest.Available}}
+        <div class="digest-banner" id="digest-banner">
+            <div class="digest-header">
+                <span class="digest-title">☀️ Overnight Digest <span class="digest-period">({{.Digest.Period}})</span></span>
+                <button class="digest-dismiss" onclick="sessionStorage.setItem('digest-dismissed','1');this.closest('.digest-banner').remove()" aria-label="Dismiss digest">✕</button>
+            </div>
+            <div class="digest-stats">
+                {{if .Digest.MergesLanded}}<span class="digest-stat digest-good">✨ {{.Digest.MergesLanded}} merged</span>{{end}}
+                {{if .Digest.WorkDone}}<span class="digest-stat digest-good">✅ {{.Digest.WorkDone}} completed</span>{{end}}
+                {{if .Digest.Slings}}<span class="digest-stat digest-neutral">🎯 {{.Digest.Slings}} slung</span>{{end}}
+                {{if .Digest.Spawns}}<span class="digest-stat digest-neutral">🦨 {{.Digest.Spawns}} spawned</span>{{end}}
+                {{if .Digest.MailSent}}<span class="digest-stat digest-neutral">📬 {{.Digest.MailSent}} mail</span>{{end}}
+                {{if .Digest.MergeFails}}<span class="digest-stat digest-warn">❌ {{.Digest.MergeFails}} merge failures</span>{{end}}
+                {{if .Digest.Deaths}}<span class="digest-stat digest-warn">☠️ {{.Digest.Deaths}} crashes</span>{{end}}
+                {{if .Digest.Escalations}}<span class="digest-stat digest-warn">⚠️ {{.Digest.Escalations}} escalations</span>{{end}}
+            </div>
+            <div class="digest-total">{{.Digest.TotalEvents}} events total</div>
+        </div>
+        <script>if(sessionStorage.getItem('digest-dismissed')){var d=document.getElementById('digest-banner');if(d)d.remove()}</script>
+        {{end}}{{end}}
 
         <div class="panels">
             <!-- Row 1: Convoys, Polecats, Sessions -->
@@ -159,7 +177,7 @@
                                         {{end}}
                                     </td>
                                     <td>
-                                        <span class="convoy-id">{{.ID}}</span>
+                                        <span class="convoy-id">{{linkify .ID}}</span>
                                         {{if .Title}}<div class="convoy-title">{{.Title}}</div>{{end}}
                                         {{if .Assignees}}<div class="convoy-assignees">{{range .Assignees}}<span class="assignee-chip">{{.}}</span>{{end}}</div>{{end}}
                                     </td>
@@ -294,10 +312,10 @@
                 </div>
             </div>
 
-            <!-- Polecats Panel -->
-            <div class="panel">
+            <!-- Polecats Panel (collapsed by default — implementation detail) -->
+            <div class="panel collapsed">
                 <div class="panel-header">
-                    <h2>🦨 Polecats</h2>
+                    <h2>🦨 Workers</h2>
                     <span class="count">{{len .Workers}}</span>
                     <button class="collapse-btn" aria-label="Toggle panel">▼</button>
                     <button class="expand-btn">Expand</button>
@@ -310,6 +328,7 @@
                                 <th>Worker</th>
                                 <th>Type</th>
                                 <th>Rig</th>
+                                <th>Branch</th>
                                 <th>Working On</th>
                                 <th>Status</th>
                                 <th>Activity</th>
@@ -321,9 +340,10 @@
                                 <td><span class="polecat-name">{{.Name}}</span></td>
                                 <td>{{if eq .AgentType "refinery"}}<span class="badge badge-blue">refinery</span>{{else}}<span class="badge badge-muted">polecat</span>{{end}}</td>
                                 <td><span class="polecat-rig">{{.Rig}}</span></td>
+                                <td>{{if .TargetBranch}}{{if ne .TargetBranch "main"}}<span class="badge badge-yellow">{{.TargetBranch}}</span>{{else}}main{{end}}{{else}}—{{end}}</td>
                                 <td class="polecat-issue">
                                     {{if .IssueID}}
-                                    <span class="issue-id">{{.IssueID}}</span>
+                                    <span class="issue-id">{{linkify .IssueID}}</span>
                                     <span class="issue-title">{{.IssueTitle}}</span>
                                     {{else}}
                                     <span class="no-issue">—</span>
@@ -356,8 +376,8 @@
                 </div>
             </div>
 
-            <!-- Sessions Panel -->
-            <div class="panel">
+            <!-- Sessions Panel (collapsed by default — implementation detail) -->
+            <div class="panel collapsed">
                 <div class="panel-header">
                     <h2>📟 Sessions</h2>
                     <span class="count">{{len .Sessions}}</span>
@@ -449,7 +469,7 @@
                             <div class="tl-content">
                                 <div class="tl-header">
                                     <span class="tl-icon">{{.Icon}}</span>
-                                    <span class="tl-summary">{{.Summary}}</span>
+                                    <span class="tl-summary">{{linkify .Summary}}</span>
                                 </div>
                                 <div class="tl-meta">
                                     {{if .Actor}}<span class="tl-badge tl-badge-agent">{{.Actor}}</span>{{end}}
@@ -581,6 +601,24 @@
                     <button class="expand-btn">Expand</button>
                 </div>
                 <div class="panel-body">
+                    <!-- Pipeline Progress View -->
+                    {{if .Pipeline}}
+                    <div class="pipeline-progress">
+                        <h3 class="pipeline-heading">⚙️ Refinery Pipeline</h3>
+                        <div class="pipeline-items">
+                            {{range .Pipeline}}
+                            <div class="pipeline-item {{pipelinePhaseClass .Phase}}">
+                                <span class="pipeline-pos">MR {{.Position}}/{{.Total}}</span>
+                                <span class="pipeline-phase">{{.Phase}}</span>
+                                <span class="pipeline-branch" title="{{.Branch}}">{{.Branch}}</span>
+                                <span class="pipeline-target">→ {{.Target}}</span>
+                                {{if .Worker}}<span class="pipeline-worker">{{.Worker}}</span>{{end}}
+                                <span class="pipeline-age">{{.Age}}</span>
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+                    {{end}}
                     <!-- PR List View -->
                     <div id="pr-list">
                         {{if .MergeQueue}}
@@ -689,7 +727,7 @@
                                     {{else}}<span class="badge badge-muted">LOW</span>{{end}}
                                 </td>
                                 <td>
-                                    <span class="severity-{{.Severity}}">{{.Title}}</span>
+                                    <span class="severity-{{.Severity}}">{{linkify .Title}}</span>
                                     {{if .Acked}}<span class="badge badge-cyan" style="margin-left: 4px;">ACK</span>{{end}}
                                 </td>
                                 <td>{{.EscalatedBy}}</td>
@@ -729,6 +767,7 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
+                                <th>Branch</th>
                                 <th>Polecats</th>
                                 <th>Crew</th>
                                 <th>Agents</th>
@@ -738,6 +777,7 @@
                             {{range .Rigs}}
                             <tr>
                                 <td><span class="rig-name">{{.Name}}</span></td>
+                                <td>{{if .TargetBranch}}{{if ne .TargetBranch "main"}}<span class="badge badge-yellow" title="Targeting {{.TargetBranch}} (not main)">🌿 {{.TargetBranch}}</span>{{else}}<span class="badge badge-muted">main</span>{{end}}{{else}}<span class="text-muted">—</span>{{end}}</td>
                                 <td>{{.PolecatCount}}</td>
                                 <td>{{.CrewCount}}</td>
                                 <td class="agent-icons">
@@ -839,6 +879,61 @@
             </div>
             {{end}}
 
+            <!-- Scoreboard Panel -->
+            {{if .Scoreboard}}
+            <div class="panel" id="scoreboard-panel">
+                <div class="panel-header">
+                    <h2>📊 Scoreboard</h2>
+                    <span class="count">{{.Scoreboard.Total}}</span>
+                    <button class="collapse-btn" aria-label="Toggle panel">▼</button>
+                    <button class="expand-btn">Expand</button>
+                </div>
+                <div class="panel-body">
+                    <div class="scoreboard">
+                        <div class="scoreboard-bar">
+                            {{if .Scoreboard.DoneCount}}<div class="sb-done" style="width: {{.Scoreboard.DonePct}}%;" title="Done: {{.Scoreboard.DoneCount}}"></div>{{end}}
+                            {{if .Scoreboard.InProgCount}}<div class="sb-inprog" style="width: {{.Scoreboard.InProgPct}}%;" title="In Progress: {{.Scoreboard.InProgCount}}"></div>{{end}}
+                        </div>
+                        <div class="scoreboard-groups">
+                            <div class="sb-group sb-group-done">
+                                <div class="sb-group-header">
+                                    <span class="sb-icon">✅</span>
+                                    <span class="sb-label">Done</span>
+                                    <span class="sb-count">{{.Scoreboard.DoneCount}}</span>
+                                </div>
+                                <div class="sb-items">
+                                    {{range .Scoreboard.Done}}<span class="sb-item sb-item-done" title="{{.ID}}: {{.Title}}">{{.Title}}</span>{{end}}
+                                    {{if not .Scoreboard.Done}}<span class="sb-empty">—</span>{{end}}
+                                </div>
+                            </div>
+                            <div class="sb-group sb-group-inprog">
+                                <div class="sb-group-header">
+                                    <span class="sb-icon">🔨</span>
+                                    <span class="sb-label">In Progress</span>
+                                    <span class="sb-count">{{.Scoreboard.InProgCount}}</span>
+                                </div>
+                                <div class="sb-items">
+                                    {{range .Scoreboard.InProgress}}<span class="sb-item sb-item-inprog" title="{{.ID}}: {{.Title}}">{{.Title}}</span>{{end}}
+                                    {{if not .Scoreboard.InProgress}}<span class="sb-empty">—</span>{{end}}
+                                </div>
+                            </div>
+                            <div class="sb-group sb-group-open">
+                                <div class="sb-group-header">
+                                    <span class="sb-icon">⬜</span>
+                                    <span class="sb-label">Open</span>
+                                    <span class="sb-count">{{.Scoreboard.OpenCount}}</span>
+                                </div>
+                                <div class="sb-items">
+                                    {{range .Scoreboard.Open}}<span class="sb-item sb-item-open" title="{{.ID}}: {{.Title}}">{{.Title}}</span>{{end}}
+                                    {{if not .Scoreboard.Open}}<span class="sb-empty">—</span>{{end}}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+
             <!-- Work Panel (Combined Issues + Ready Work) -->
             <div class="panel" id="work-panel">
                 <div class="panel-header">
@@ -863,6 +958,7 @@
                                     <th>Pri</th>
                                     <th>ID</th>
                                     <th>Title</th>
+                                    <th>Origin</th>
                                     <th>Status</th>
                                     <th>Age</th>
                                     <th>Actions</th>
@@ -877,8 +973,12 @@
                                         {{else if eq .Priority 3}}<span class="badge badge-yellow">P3</span>
                                         {{else}}<span class="badge badge-muted">P4</span>{{end}}
                                     </td>
-                                    <td><span class="issue-id">{{.ID}}</span></td>
+                                    <td><span class="issue-id">{{linkify .ID}}</span></td>
                                     <td class="issue-title">{{.Title}}</td>
+                                    <td class="issue-origin">
+                                        {{if eq .Origin "agent"}}<span class="badge badge-origin-agent" title="Agent-proposed">🤖</span>
+                                        {{else}}<span class="badge badge-origin-human" title="Human-requested">👤</span>{{end}}
+                                    </td>
                                     <td class="issue-status">
                                         {{if .Assignee}}<span class="badge badge-blue" title="{{.Assignee}}">{{.Assignee}}</span>{{else}}<span class="badge badge-green">Ready</span>{{end}}
                                     </td>
@@ -910,6 +1010,7 @@
                                 <span id="issue-detail-type"></span>
                                 <span id="issue-detail-owner"></span>
                                 <span id="issue-detail-created"></span>
+                                <span id="issue-detail-origin"></span>
                             </div>
                             <div id="issue-detail-actions" class="issue-detail-actions"></div>
                             <div class="issue-detail-section">
@@ -962,7 +1063,7 @@
                         <tbody>
                             {{range .Hooks}}
                             <tr class="{{if .IsStale}}hook-stale{{end}}">
-                                <td><span class="hook-id">{{.ID}}</span></td>
+                                <td><span class="hook-id">{{linkify .ID}}</span></td>
                                 <td class="hook-title">{{.Title}}</td>
                                 <td class="hook-agent">{{.Agent}}</td>
                                 <td class="hook-age">

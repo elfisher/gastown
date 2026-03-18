@@ -34,6 +34,19 @@ export function statusColor(status: string): string {
   }
 }
 
+export function breadcrumbs(
+  crumbs: { label: string; href?: string }[]
+): string {
+  const items = crumbs
+    .map((c) =>
+      c.href
+        ? `<li><a href="${c.href}" class="link link-hover">${escapeHtml(c.label)}</a></li>`
+        : `<li><span>${escapeHtml(c.label)}</span></li>`
+    )
+    .join("");
+  return `<div class="text-sm breadcrumbs mb-4"><ul>${items}</ul></div>`;
+}
+
 export function priorityLabel(p: number): string {
   const labels: Record<number, string> = {
     0: '<span class="badge badge-error badge-xs">P0</span>',

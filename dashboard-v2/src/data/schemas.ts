@@ -18,12 +18,15 @@ export const AgentSchema = z.object({
   rig: z.string(),
   role: z.enum(["mayor", "deacon", "witness", "refinery", "polecat", "crew", "boot"]),
   session: z.string(),
-  status: z.enum(["working", "idle", "dead"]),
+  status: z.enum(["working", "idle", "dead", "recovering"]),
   runtime: z.string().optional(),
   startedAt: z.string(),
   lastActivity: z.string(),
   currentWork: z.string().optional(),
   preview: z.string().optional(),
+  pid: z.number().optional(),
+  workingDir: z.string().optional(),
+  gitBranch: z.string().optional(),
 });
 
 export const AgentListSchema = z.array(AgentSchema);
@@ -80,6 +83,13 @@ export const BeadDetailSchema = BeadSchema.extend({
 });
 export type BeadDetail = z.infer<typeof BeadDetailSchema>;
 
+// --- Agent Work History ---
+export interface AgentWorkHistoryEntry {
+  id: string;
+  title: string;
+  closedAt: string;
+}
+
 // --- Bead History (from bd history --json) ---
 export interface BeadHistoryEntry {
   date: string;
@@ -99,6 +109,24 @@ export const ConvoySchema = z.object({
 });
 export type Convoy = z.infer<typeof ConvoySchema>;
 export const ConvoyListSchema = z.array(ConvoySchema);
+
+// --- Merge Queue ---
+export const MergeQueueItemSchema = z.object({
+  id: z.string(),
+  branch: z.string().optional(),
+  issue: z.string().optional(),
+  worker: z.string().optional(),
+  status: z.string(),
+  submitted_at: z.string().optional(),
+});
+export type MergeQueueItem = z.infer<typeof MergeQueueItemSchema>;
+export const MergeQueueSchema = z.array(MergeQueueItemSchema);
+
+// --- Repo Info ---
+export interface RepoInfo {
+  url: string;
+  branch: string;
+}
 
 // --- Event (from gt feed --plain) ---
 export const EventSchema = z.object({

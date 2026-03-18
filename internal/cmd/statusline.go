@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -150,6 +151,15 @@ func runWorkerStatusLine(t *tmux.Tmux, session, rigName, polecat, crew, issue st
 				parts = append(parts, fmt.Sprintf("\U0001F4EC %s", subject))
 			} else {
 				parts = append(parts, fmt.Sprintf("\U0001F4EC %d", unread))
+			}
+		}
+	}
+
+	// Show target branch if not main
+	if session != "" && townRoot != "" {
+		if paneDir, err := t.GetPaneWorkDir(session); err == nil && paneDir != "" {
+			if branch := getWorktreeTargetBranch(paneDir); branch != "" && branch != "main" {
+				parts = append(parts, fmt.Sprintf("🌿 %s", branch))
 			}
 		}
 	}
@@ -726,4 +736,19 @@ func getCurrentWork(t *tmux.Tmux, session string, identity string, maxLen int) s
 		display = display[:maxLen-1] + "…"
 	}
 	return display
+}
+
+// getWorktreeTargetBranch returns the upstream tracking branch for the git
+// worktree at the given path (e.g., "dashboard-v2"). Returns empty string
+// if not a git worktree or no upstream is set.
+func getWorktreeTargetBranch(worktreePath string) string {
+	out, err := exec.Command("git", "-C", worktreePath, "rev-parse", "--abbrev-ref", "@{upstream}").Output()
+	if err != nil {
+		return ""
+	}
+	branch := strings.TrimPrefix(strings.TrimSpace(string(out)), "origin/")
+	if branch == "" || branch == "HEAD" {
+		return ""
+	}
+	return branch
 }

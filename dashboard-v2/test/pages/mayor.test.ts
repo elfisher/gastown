@@ -58,7 +58,9 @@ describe("renderMessages", () => {
     const html = renderMessages(msgs);
     expect(html).toContain("alert");
     expect(html).toContain("alert-info");
-    expect(html).toContain("Slung gt-abc12 to furiosa");
+    expect(html).toContain("Slung");
+    expect(html).toContain('href="/bead/gt-abc12"');
+    expect(html).toContain("furiosa");
     // Action messages should NOT use chat bubbles
     expect(html).not.toContain("chat-start");
   });

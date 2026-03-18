@@ -2112,26 +2112,29 @@
             background: var(--text-muted);
         }
 
-        /* Mayor status banner */
+        /* Mayor panel with terminal view */
+        .mayor-panel {
+            margin-bottom: 16px;
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .mayor-panel.attached {
+            border-color: var(--green);
+            background: rgba(166, 209, 137, 0.08);
+        }
+
+        .mayor-panel.detached {
+            opacity: 0.7;
+        }
+
         .mayor-banner {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 12px 20px;
-            margin-bottom: 16px;
-            background: var(--bg-elevated);
-            border-radius: 8px;
-            border: 1px solid var(--border);
-        }
-
-        .mayor-banner.attached {
-            border-color: var(--green);
-            background: rgba(166, 209, 137, 0.08);
-        }
-
-        .mayor-banner.detached {
-            border-color: var(--text-muted);
-            opacity: 0.7;
         }
 
         .mayor-info {
@@ -2178,6 +2181,68 @@
 
         .mayor-stat-value.idle {
             color: var(--yellow);
+        }
+
+        .mayor-terminal-toggle {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            transition: transform 0.2s;
+        }
+
+        .mayor-terminal-toggle:hover {
+            color: var(--text-primary);
+            border-color: var(--text-muted);
+        }
+
+        .mayor-terminal-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .mayor-terminal {
+            border-top: 1px solid var(--border);
+        }
+
+        .mayor-terminal.collapsed {
+            display: none;
+        }
+
+        .mayor-terminal-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 12px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .mayor-terminal-title {
+            font-size: 0.75rem;
+            color: var(--cyan);
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+        }
+
+        .mayor-terminal-refresh {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .mayor-terminal-content {
+            margin: 0;
+            padding: 12px;
+            background: var(--bg-dark);
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+            min-height: 80px;
         }
 
         /* Summary & Alerts Banner */

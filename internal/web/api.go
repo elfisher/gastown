@@ -2020,9 +2020,56 @@ func (h *APIHandler) handleSessionPreview(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(SessionPreviewResponse{
 		Session:   sessionName,
-		Content:   stdout.String(),
+		Content:   filterSessionOutput(stdout.String()),
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
+}
+
+// filterSessionOutput strips THINKING/spinner noise from tmux capture-pane output.
+// Claude's terminal output includes "⏳ Thinking..." lines and spinner frames
+// (e.g., "⠋ THINKING", "⠙ THINKING") that clutter the preview.
+func filterSessionOutput(raw string) string {
+	lines := strings.Split(raw, "\n")
+	var filtered []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip empty lines at the start (tmux padding)
+		if len(filtered) == 0 && trimmed == "" {
+			continue
+		}
+		// Skip THINKING/spinner lines
+		if isThinkingLine(trimmed) {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	// Trim trailing empty lines
+	for len(filtered) > 0 && strings.TrimSpace(filtered[len(filtered)-1]) == "" {
+		filtered = filtered[:len(filtered)-1]
+	}
+	return strings.Join(filtered, "\n")
+}
+
+// isThinkingLine returns true if the line is a THINKING spinner or status line.
+func isThinkingLine(line string) bool {
+	// Braille spinner characters used by Claude CLI: ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏
+	// Match lines that are just a spinner + "THINKING" or "Thinking..."
+	upper := strings.ToUpper(line)
+	// Strip leading spinner/emoji characters for matching
+	cleaned := strings.TrimLeftFunc(line, func(r rune) bool {
+		return r == '⠋' || r == '⠙' || r == '⠹' || r == '⠸' || r == '⠼' || r == '⠴' ||
+			r == '⠦' || r == '⠧' || r == '⠇' || r == '⠏' || r == '⏳' || r == ' '
+	})
+	cleanedUpper := strings.ToUpper(strings.TrimSpace(cleaned))
+	if cleanedUpper == "THINKING" || cleanedUpper == "THINKING..." ||
+		strings.HasPrefix(cleanedUpper, "THINKING…") {
+		return true
+	}
+	// Also match raw "THINKING" anywhere as the sole content
+	if upper == "THINKING" || upper == "THINKING..." || upper == "THINKING…" {
+		return true
+	}
+	return false
 }
 
 // parseCommandArgs splits a command string into args, respecting quotes.

@@ -3275,4 +3275,94 @@
     window.openIssueDetail = openIssueDetail;
     window.openConvoyDetail = openConvoyDetail;
 
+    // ============================================
+    // MAYOR TERMINAL VIEW
+    // ============================================
+    var mayorTerminalInterval = null;
+    var mayorTerminalUserScrolled = false;
+
+    function initMayorTerminal() {
+        var panel = document.querySelector('.mayor-panel[data-mayor-session]');
+        if (!panel) return;
+
+        var sessionName = panel.getAttribute('data-mayor-session');
+        if (!sessionName) return;
+
+        var contentEl = document.getElementById('mayor-terminal-content');
+        var refreshEl = document.getElementById('mayor-terminal-refresh');
+        var toggleBtn = document.getElementById('mayor-terminal-toggle');
+        var terminalEl = document.getElementById('mayor-terminal');
+        if (!contentEl || !terminalEl) return;
+
+        // Track user scroll
+        contentEl.onscroll = function() {
+            var atBottom = contentEl.scrollHeight - contentEl.scrollTop - contentEl.clientHeight < 40;
+            mayorTerminalUserScrolled = !atBottom;
+        };
+
+        // Toggle collapse
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+                var collapsed = terminalEl.classList.toggle('collapsed');
+                toggleBtn.classList.toggle('collapsed', collapsed);
+                toggleBtn.textContent = collapsed ? '▶' : '▼';
+                if (collapsed) {
+                    stopMayorTerminal();
+                } else {
+                    startMayorTerminal(sessionName, contentEl, refreshEl);
+                }
+            });
+        }
+
+        // Auto-start
+        startMayorTerminal(sessionName, contentEl, refreshEl);
+    }
+
+    function startMayorTerminal(sessionName, contentEl, refreshEl) {
+        fetchMayorTerminal(sessionName, contentEl, refreshEl);
+        if (mayorTerminalInterval) clearInterval(mayorTerminalInterval);
+        mayorTerminalInterval = setInterval(function() {
+            fetchMayorTerminal(sessionName, contentEl, refreshEl);
+        }, 3000);
+    }
+
+    function stopMayorTerminal() {
+        if (mayorTerminalInterval) {
+            clearInterval(mayorTerminalInterval);
+            mayorTerminalInterval = null;
+        }
+    }
+
+    function fetchMayorTerminal(sessionName, contentEl, refreshEl) {
+        fetch('/api/session/preview?session=' + encodeURIComponent(sessionName))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    contentEl.textContent = 'Error: ' + data.error;
+                    return;
+                }
+                contentEl.textContent = data.content || '(no output)';
+                if (!mayorTerminalUserScrolled) {
+                    contentEl.scrollTop = contentEl.scrollHeight;
+                }
+                if (refreshEl) {
+                    var now = new Date();
+                    var timeStr = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes() + ':' + (now.getSeconds() < 10 ? '0' : '') + now.getSeconds();
+                    refreshEl.textContent = 'refreshed ' + timeStr;
+                }
+            })
+            .catch(function(err) {
+                contentEl.textContent = 'Failed to load: ' + err.message;
+            });
+    }
+
+    // Init on page load
+    initMayorTerminal();
+
+    // Re-init after htmx swaps (page refresh)
+    document.body.addEventListener('htmx:afterSwap', function() {
+        stopMayorTerminal();
+        initMayorTerminal();
+    });
+
 })();

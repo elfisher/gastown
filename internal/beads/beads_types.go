@@ -304,7 +304,12 @@ func ensureDatabaseInitialized(beadsDir string) error {
 			if _, err := os.Stat(dbDir); !os.IsNotExist(err) {
 				return nil // Database exists (or stat error — assume initialized)
 			}
-			// metadata.json exists but database doesn't — fall through to init
+			// metadata.json exists but database directory is missing.
+			// This is a connectivity/config problem, NOT a fresh rig.
+			// Running bd init here would wipe all existing beads data.
+			// Return an error so the caller knows the DB is unreachable.
+			return fmt.Errorf("database %q not found at %s but metadata.json exists — Dolt server may be down or .dolt-data is missing (do NOT run bd init)",
+				meta.DoltDatabase, dbDir)
 		} else {
 			return nil // Non-server mode or no database ref — assume initialized
 		}

@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/data/agents.js", () => ({
   listAgents: vi.fn(),
+  listAgentsForRig: vi.fn().mockResolvedValue([]),
   getAgentPreview: vi.fn(),
   getAgentOutput: vi.fn(),
+  getAgentSessionInfo: vi.fn().mockResolvedValue(undefined),
+  getAgentWorkHistory: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../../src/data/mayor.js", () => ({
@@ -13,6 +16,14 @@ vi.mock("../../src/data/mayor.js", () => ({
 
 vi.mock("../../src/data/rigs.js", () => ({
   listRigs: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("../../src/data/projects.js", () => ({
+  getProjectsData: vi.fn().mockResolvedValue({ rigs: [], convoys: [], agents: [] }),
+}));
+
+vi.mock("../../src/data/terminal.js", () => ({
+  getSessionOutput: vi.fn().mockResolvedValue(""),
 }));
 
 vi.mock("../../src/config.js", () => ({

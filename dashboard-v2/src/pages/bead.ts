@@ -2,7 +2,7 @@ import { getBead } from "../data/beads.js";
 import { listConvoys } from "../data/convoys.js";
 import { getBeadBranchInfo, type BranchInfo } from "../data/git.js";
 import { getAgentOutput } from "../data/agents.js";
-import { escapeHtml, statusBadge, priorityLabel } from "./helpers.js";
+import { escapeHtml, statusBadge, priorityLabel, originBadge } from "./helpers.js";
 import type { BeadDetail } from "../data/schemas.js";
 
 interface BeadHistoryEntry { timestamp: string; action: string; actor?: string; detail?: string; date?: string; committer?: string; status?: string; }
@@ -304,6 +304,7 @@ ${renderBreadcrumbs(bead, rigName, convoyId)}
   <div class="flex gap-2 items-center not-prose flex-wrap">
     ${statusBadge(bead.status)}
     ${priorityLabel(bead.priority)}
+    ${originBadge(bead.created_by)}
     <span class="badge badge-ghost font-mono text-xs">${escapeHtml(bead.id)}</span>
     <span class="badge badge-ghost text-xs">${escapeHtml(bead.issue_type)}</span>
     ${bead.assignee ? `<span class="text-sm text-base-content/50">→ ${escapeHtml(bead.assignee)}</span>` : ""}

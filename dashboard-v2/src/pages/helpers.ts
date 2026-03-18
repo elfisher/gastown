@@ -47,6 +47,16 @@ export function breadcrumbs(
   return `<div class="text-sm breadcrumbs mb-4"><ul>${items}</ul></div>`;
 }
 
+/** Badge showing whether a bead was filed by a human or an agent */
+export function originBadge(createdBy?: string): string {
+  if (!createdBy) return "";
+  const isAgent = createdBy.includes("polecats/") || createdBy === "refinery" || createdBy.includes("/refinery");
+  if (isAgent) {
+    return `<span class="badge badge-sm badge-outline gap-1" title="Filed by ${escapeHtml(createdBy)}">🤖 Agent-proposed</span>`;
+  }
+  return `<span class="badge badge-sm badge-outline gap-1" title="Filed by ${escapeHtml(createdBy)}">👤 Human-requested</span>`;
+}
+
 export function priorityLabel(p: number): string {
   const labels: Record<number, string> = {
     0: '<span class="badge badge-error badge-xs">P0</span>',

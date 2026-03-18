@@ -1,6 +1,6 @@
 import { getConvoy } from "../data/convoys.js";
 import { listBeads, getBead } from "../data/beads.js";
-import { escapeHtml, statusBadge, statusColor, priorityLabel, breadcrumbs } from "./helpers.js";
+import { escapeHtml, statusBadge, statusColor, priorityLabel, breadcrumbs, originBadge } from "./helpers.js";
 import type { Bead, BeadDep } from "../data/schemas.js";
 
 interface DagNode {
@@ -61,10 +61,11 @@ export async function renderConvoyPage(id: string): Promise<string> {
         <td><a href="/bead/${encodeURIComponent(b.id)}" class="link link-hover font-mono text-xs">${escapeHtml(b.id)}</a></td>
         <td>${escapeHtml(b.title)}</td>
         <td>${statusBadge(b.status)}</td>
+        <td>${originBadge(b.created_by)}</td>
         <td>${escapeHtml(b.assignee ?? "—")}</td>
         <td>${priorityLabel(b.priority)}</td>
       </tr>`).join("")
-    : `<tr><td colspan="5" class="text-base-content/50">No beads in convoy</td></tr>`;
+    : `<tr><td colspan="6" class="text-base-content/50">No beads in convoy</td></tr>`;
 
   // Serialize DAG data for client-side ELK rendering
   const dagData = JSON.stringify({ nodes, edges });
@@ -96,7 +97,7 @@ ${breadcrumbs([{ label: "Gas Town", href: "/" }, { label: "Convoys", href: "/con
   <div class="overflow-x-auto">
     <table class="table table-sm">
       <thead>
-        <tr><th>ID</th><th>Title</th><th>Status</th><th>Agent</th><th>Priority</th></tr>
+        <tr><th>ID</th><th>Title</th><th>Status</th><th>Origin</th><th>Agent</th><th>Priority</th></tr>
       </thead>
       <tbody>${beadRows}</tbody>
     </table>

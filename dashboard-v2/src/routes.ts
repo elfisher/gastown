@@ -14,6 +14,7 @@ import { renderBeadPage } from "./pages/bead.js";
 import { renderConvoyListPage } from "./pages/convoy-list.js";
 import { registerPipelineApi } from "./api/pipeline.js";
 import { renderAgentsPage, renderAgentDetailPage } from "./pages/agents.js";
+import { renderTourPage } from "./pages/tour.js";
 import { registerAgentsApi } from "./api/agents.js";
 import type { Rig } from "./data/schemas.js";
 
@@ -90,7 +91,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/tour", async (_req, reply) => {
-    const html = await withLayout("Tour", placeholder("Tour"), "/tour");
+    const html = await withLayout("Tour", renderTourPage(), "/tour");
     return reply.type("text/html").send(html);
   });
 

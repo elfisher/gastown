@@ -46,13 +46,11 @@ while read local_ref local_sha remote_ref remote_sha; do
     "${default_branch}"|beads-sync|polecat/*|integration/*)
       # Allowed branches
       ;;
-    "${working_branch}")
+    *)
       # Working branch from config.json base_branch — allowed
-      if [[ -n "$working_branch" ]]; then
+      if [[ -n "$working_branch" && "$branch" == "$working_branch" ]]; then
         continue
       fi
-      ;;&
-    *)
       # Allow feature branches when contributing to upstream (fork workflow).
       # If an 'upstream' remote exists, this is a contribution setup where
       # feature branches are needed for PRs. See: #848

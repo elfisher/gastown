@@ -15,6 +15,9 @@ import { renderConvoyListPage } from "./pages/convoy-list.js";
 import { registerPipelineApi } from "./api/pipeline.js";
 import { renderAgentsPage, renderAgentDetailPage } from "./pages/agents.js";
 import { registerAgentsApi } from "./api/agents.js";
+import { getProjectsData } from "./data/projects.js";
+import { renderProjectsPage } from "./pages/projects.js";
+import { registerProjectsApi } from "./api/projects.js";
 import type { Rig } from "./data/schemas.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -105,14 +108,33 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.type("text/html").send(html);
   });
 
-  app.get("/overview", async (_req, reply) => {
+  const projectsHandler = async (
+    req: { query: { search?: string; status?: string; priority?: string } },
+    reply: { type: (t: string) => { send: (h: string) => unknown } }
+  ) => {
+    const search = req.query.search || undefined;
+    const status = req.query.status || undefined;
+    const priority = req.query.priority
+      ? parseInt(req.query.priority, 10)
+      : undefined;
+    const data = await getProjectsData({ search, status, priority });
     const html = await withLayout(
       "Project Overview",
-      placeholder("Project Overview"),
+      renderProjectsPage(data, search, status),
       "/overview"
     );
     return reply.type("text/html").send(html);
-  });
+  };
+
+  app.get<{ Querystring: { search?: string; status?: string; priority?: string } }>(
+    "/overview",
+    projectsHandler
+  );
+
+  app.get<{ Querystring: { search?: string; status?: string; priority?: string } }>(
+    "/projects",
+    projectsHandler
+  );
 
   app.get<{ Params: { name: string } }>(
     "/rig/:name",
@@ -172,4 +194,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerMayorApi(app);
   await registerPipelineApi(app);
   await registerAgentsApi(app);
+  await registerProjectsApi(app);
 }

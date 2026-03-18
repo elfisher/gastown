@@ -2017,12 +2017,71 @@ func (h *APIHandler) handleSessionPreview(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	content := stdout.String()
+	if r.URL.Query().Get("filter") == "true" {
+		content = filterTerminalNoise(content)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(SessionPreviewResponse{
 		Session:   sessionName,
-		Content:   stdout.String(),
+		Content:   content,
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
+}
+
+// filterTerminalNoise removes spinner frames, THINKING indicators, and other
+// noise from raw tmux capture-pane output so the preview shows meaningful content.
+func filterTerminalNoise(raw string) string {
+	lines := strings.Split(raw, "\n")
+	var filtered []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip spinner-only lines (braille spinner chars)
+		if isSpinnerLine(trimmed) {
+			continue
+		}
+		// Skip "THINKING" indicator lines from Claude
+		if isThinkingLine(trimmed) {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	return strings.Join(filtered, "\n")
+}
+
+// isSpinnerLine returns true if the line is just spinner characters.
+func isSpinnerLine(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		// Braille spinner chars: ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ and common ASCII spinners
+		if r >= 0x2800 && r <= 0x28FF {
+			continue
+		}
+		if r == ' ' || r == '|' || r == '/' || r == '-' || r == '\\' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// isThinkingLine returns true if the line is a THINKING/reasoning indicator.
+func isThinkingLine(s string) bool {
+	upper := strings.ToUpper(s)
+	// Match lines that are just "THINKING" or "THINKING..." with optional spinner
+	if strings.HasPrefix(upper, "THINKING") {
+		rest := strings.TrimPrefix(upper, "THINKING")
+		rest = strings.TrimLeft(rest, ". ")
+		return isSpinnerLine(rest) || rest == ""
+	}
+	// Match "⏳ Thinking..." style
+	if strings.Contains(upper, "THINKING") && len(s) < 40 {
+		return true
+	}
+	return false
 }
 
 // parseCommandArgs splits a command string into args, respecting quotes.

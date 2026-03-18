@@ -153,13 +153,15 @@
         var convoyDetailView = document.getElementById('convoy-detail');
         var convoyCreateView = document.getElementById('convoy-create-form');
         var sessionPreview = document.getElementById('session-preview');
+        var mayorTerminal = document.getElementById('mayor-terminal');
         var inDetailView = (mailDetail && mailDetail.style.display !== 'none') ||
                           (mailCompose && mailCompose.style.display !== 'none') ||
                           (issueDetail && issueDetail.style.display !== 'none') ||
                           (prDetail && prDetail.style.display !== 'none') ||
                           (convoyDetailView && convoyDetailView.style.display !== 'none') ||
                           (convoyCreateView && convoyCreateView.style.display !== 'none') ||
-                          (sessionPreview && sessionPreview.style.display !== 'none');
+                          (sessionPreview && sessionPreview.style.display !== 'none') ||
+                          mayorTerminalOpen;
         if (!inDetailView && !hasExpanded) {
             window.pauseRefresh = false;
         }
@@ -168,6 +170,18 @@
         if (window.refreshReadyPanel) window.refreshReadyPanel();
         // Update connection status indicator after morph
         updateConnectionStatus(window.sseConnected ? 'live' : 'reconnecting');
+        // Restore mayor terminal state after morph (server renders display:none)
+        if (mayorTerminalOpen) {
+            var mt = document.getElementById('mayor-terminal');
+            var mb = document.querySelector('.mayor-banner.attached');
+            if (mt) mt.style.display = 'block';
+            if (mb) {
+                mb.classList.add('mayor-expanded');
+                mb.setAttribute('aria-expanded', 'true');
+                var hint = mb.querySelector('.mayor-toggle-hint .mayor-stat-value');
+                if (hint) hint.textContent = '▲ Terminal';
+            }
+        }
     });
 
     // ============================================
@@ -3015,6 +3029,113 @@
     document.body.addEventListener('htmx:afterSwap', function() {
         initTimelineFilters();
     });
+
+    // ============================================
+    // MAYOR TERMINAL VIEW
+    // ============================================
+    var mayorTerminalInterval = null;
+    var mayorTerminalOpen = false;
+    var mayorTerminalUserScrolled = false;
+
+    document.addEventListener('click', function(e) {
+        var banner = e.target.closest('.mayor-banner.attached');
+        if (!banner) return;
+        e.preventDefault();
+        var sessionName = banner.getAttribute('data-session');
+        if (!sessionName) return;
+        toggleMayorTerminal(banner, sessionName);
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            var banner = e.target.closest('.mayor-banner.attached');
+            if (!banner) return;
+            e.preventDefault();
+            var sessionName = banner.getAttribute('data-session');
+            if (sessionName) toggleMayorTerminal(banner, sessionName);
+        }
+    });
+
+    function toggleMayorTerminal(banner, sessionName) {
+        var terminal = document.getElementById('mayor-terminal');
+        if (!terminal) return;
+
+        if (mayorTerminalOpen) {
+            closeMayorTerminal(banner, terminal);
+        } else {
+            openMayorTerminal(banner, terminal, sessionName);
+        }
+    }
+
+    function openMayorTerminal(banner, terminal, sessionName) {
+        mayorTerminalOpen = true;
+        mayorTerminalUserScrolled = false;
+        banner.classList.add('mayor-expanded');
+        banner.setAttribute('aria-expanded', 'true');
+        terminal.style.display = 'block';
+
+        var contentEl = document.getElementById('mayor-terminal-content');
+        var statusEl = document.getElementById('mayor-terminal-status');
+        if (!contentEl) return;
+
+        contentEl.onscroll = function() {
+            var atBottom = contentEl.scrollHeight - contentEl.scrollTop - contentEl.clientHeight < 40;
+            mayorTerminalUserScrolled = !atBottom;
+        };
+
+        contentEl.textContent = 'Loading...';
+        fetchMayorTerminal(sessionName, contentEl, statusEl);
+
+        if (mayorTerminalInterval) clearInterval(mayorTerminalInterval);
+        mayorTerminalInterval = setInterval(function() {
+            fetchMayorTerminal(sessionName, contentEl, statusEl);
+        }, 3000);
+
+        // Update toggle hint text
+        var hint = banner.querySelector('.mayor-toggle-hint .mayor-stat-value');
+        if (hint) hint.textContent = '▲ Terminal';
+    }
+
+    function closeMayorTerminal(banner, terminal) {
+        mayorTerminalOpen = false;
+        mayorTerminalUserScrolled = false;
+        if (mayorTerminalInterval) {
+            clearInterval(mayorTerminalInterval);
+            mayorTerminalInterval = null;
+        }
+        banner.classList.remove('mayor-expanded');
+        banner.setAttribute('aria-expanded', 'false');
+        terminal.style.display = 'none';
+
+        var contentEl = document.getElementById('mayor-terminal-content');
+        if (contentEl) contentEl.onscroll = null;
+
+        var hint = banner.querySelector('.mayor-toggle-hint .mayor-stat-value');
+        if (hint) hint.textContent = '▼ Terminal';
+    }
+
+    function fetchMayorTerminal(sessionName, contentEl, statusEl) {
+        fetch('/api/session/preview?session=' + encodeURIComponent(sessionName) + '&filter=true')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    contentEl.textContent = 'Error: ' + data.error;
+                    return;
+                }
+                contentEl.textContent = data.content || '(no output)';
+                if (!mayorTerminalUserScrolled) {
+                    contentEl.scrollTop = contentEl.scrollHeight;
+                }
+                if (statusEl) {
+                    var now = new Date();
+                    var timeStr = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes() + ':' + (now.getSeconds() < 10 ? '0' : '') + now.getSeconds();
+                    statusEl.textContent = 'refreshed ' + timeStr;
+                }
+            })
+            .catch(function(err) {
+                contentEl.textContent = 'Failed to load: ' + err.message;
+            });
+    }
 
     // ============================================
     // SESSION TERMINAL PREVIEW

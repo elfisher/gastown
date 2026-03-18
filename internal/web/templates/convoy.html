@@ -28,7 +28,8 @@
         </header>
 
         <!-- Mayor Status Banner -->
-        <div class="mayor-banner {{if .Mayor}}{{if .Mayor.IsAttached}}attached{{else}}detached{{end}}{{else}}detached{{end}}">
+        <div class="mayor-banner {{if .Mayor}}{{if .Mayor.IsAttached}}attached{{else}}detached{{end}}{{else}}detached{{end}}"
+             {{if .Mayor}}{{if .Mayor.IsAttached}}data-session="{{.Mayor.SessionName}}" role="button" tabindex="0" aria-expanded="false" aria-controls="mayor-terminal"{{end}}{{end}}>
             <div class="mayor-info">
                 <span class="mayor-icon">🎩</span>
                 <span class="mayor-title">The Mayor</span>
@@ -54,8 +55,19 @@
                     <span class="mayor-stat-label">Runtime</span>
                     <span class="mayor-stat-value">{{.Mayor.Runtime}}</span>
                 </div>
+                <div class="mayor-stat mayor-toggle-hint">
+                    <span class="mayor-stat-value">▼ Terminal</span>
+                </div>
             </div>
             {{end}}{{end}}
+        </div>
+        <!-- Mayor Terminal View -->
+        <div id="mayor-terminal" class="mayor-terminal" style="display:none;">
+            <div class="mayor-terminal-header">
+                <span class="mayor-terminal-title">🎩 Mayor Terminal</span>
+                <span id="mayor-terminal-status" class="mayor-terminal-refresh-status"></span>
+            </div>
+            <pre id="mayor-terminal-content" class="mayor-terminal-content">Loading...</pre>
         </div>
 
         <!-- Summary & Alerts Banner -->

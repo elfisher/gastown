@@ -13,12 +13,22 @@ vi.mock("../../src/data/convoys.js", () => ({
   getConvoyBeads: vi.fn(),
 }));
 
+vi.mock("../../src/data/agents.js", () => ({
+  getAgentOutput: vi.fn(),
+}));
+
+vi.mock("../../src/data/git.js", () => ({
+  getBeadBranchInfo: vi.fn(),
+}));
+
 import { getBead, getBeadHistory } from "../../src/data/beads.js";
 import { listConvoys } from "../../src/data/convoys.js";
+import { getAgentOutput } from "../../src/data/agents.js";
 
 const mockedGetBead = vi.mocked(getBead);
 const mockedGetBeadHistory = vi.mocked(getBeadHistory);
 const mockedListConvoys = vi.mocked(listConvoys);
+const mockedGetAgentOutput = vi.mocked(getAgentOutput);
 
 const openBead = {
   id: "gt-abc12",
@@ -89,6 +99,7 @@ describe("bead detail page", () => {
 
   it("renders hooked bead with assignee and agent output", async () => {
     mockedGetBead.mockResolvedValue(hookedBead);
+    mockedGetAgentOutput.mockResolvedValue("$ gt prime\nYou are polecat furiosa...");
     const html = await renderBeadPage("gt-def34");
     expect(html).toContain("hooked");
     expect(html).toContain("gastown/polecats/furiosa");
@@ -133,6 +144,7 @@ describe("bead detail page", () => {
       { date: "2026-03-17T12:59:07Z", committer: "mayor", status: "hooked" },
       { date: "2026-03-13T20:33:25Z", committer: "mayor", status: "open" },
     ]);
+    mockedGetAgentOutput.mockResolvedValue("");
     const html = await renderBeadPage("gt-def34");
     expect(html).toContain("Timeline");
     expect(html).toContain("timeline");

@@ -1,12 +1,9 @@
-import { getBead } from "../data/beads.js";
+import { getBead, getBeadHistory } from "../data/beads.js";
 import { listConvoys } from "../data/convoys.js";
 import { getBeadBranchInfo, type BranchInfo } from "../data/git.js";
 import { getAgentOutput } from "../data/agents.js";
 import { escapeHtml, statusBadge, priorityLabel } from "./helpers.js";
-import type { BeadDetail } from "../data/schemas.js";
-
-interface BeadHistoryEntry { timestamp: string; action: string; actor?: string; detail?: string; date?: string; committer?: string; status?: string; }
-async function getBeadHistory(_id: string): Promise<BeadHistoryEntry[]> { return []; }
+import type { BeadDetail, BeadHistoryEntry } from "../data/schemas.js";
 
 /** Extract rig name from bead ID prefix (e.g. "gt-abc" → "gastown" via prefix lookup) */
 function rigFromAssignee(assignee?: string): string | undefined {
@@ -83,11 +80,11 @@ function renderTimeline(history: BeadHistoryEntry[]): string {
   }
   const items = history.map((e) => `
     <li>
-      <div class="timeline-start text-xs text-base-content/50">${escapeHtml(e.date ?? e.timestamp)}</div>
+      <div class="timeline-start text-xs text-base-content/50">${escapeHtml(e.date)}</div>
       <div class="timeline-middle"><span class="badge badge-xs badge-primary"></span></div>
       <div class="timeline-end timeline-box text-sm">
-        <span class="font-semibold">${escapeHtml(e.committer ?? e.actor ?? "")}</span>
-        → ${statusBadge(e.status ?? e.action)}
+        <span class="font-semibold">${escapeHtml(e.committer)}</span>
+        → ${statusBadge(e.status)}
       </div>
       <hr/>
     </li>`).join("");

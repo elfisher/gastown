@@ -1,98 +1,80 @@
-# Kiro CLI Capabilities for Gas Town
+# Kiro CLI Capabilities
 
-Reference for what Kiro natively supports. Check this before building workarounds.
+Reference for what Kiro CLI natively supports. Consult this before building Kiro-specific workarounds.
 
-Source: https://kiro.dev/docs/cli/
+**How to learn about Kiro's capabilities:**
+- Docs: https://kiro.dev/docs/cli/
+- Key pages: [Hooks](https://kiro.dev/docs/cli/hooks/), [Custom Agents](https://kiro.dev/docs/cli/custom-agents/configuration-reference/), [Steering](https://kiro.dev/docs/cli/steering/), [Skills](https://kiro.dev/docs/cli/skills/), [MCP](https://kiro.dev/docs/cli/mcp/)
+- CLI help: `kiro-cli chat --help` (covers flags, not hooks/agents/steering)
+- In-session: `/agent`, `/context show`, `/model`
 
-## Hooks (lifecycle events)
+**When to check these docs:** Before building any workaround for a perceived Kiro limitation. The idle agent problem cost us two days of daemon-level tmux injection work before we discovered Kiro already had stop hooks.
 
-Kiro supports hooks at these trigger points:
-- **AgentSpawn** — when agent is activated. STDOUT added to context.
-- **UserPromptSubmit** — when user submits a prompt. STDOUT added to context.
-- **PreToolUse** — before tool execution. Can block (exit 2). Supports matchers.
-- **PostToolUse** — after tool execution. Supports matchers.
-- **Stop** — when assistant finishes responding (end of each turn). STDOUT captured but NOT added to context.
+## Hooks
 
-Config: `.kiro/agents/<name>.json` → `hooks` field. Timeout: 30s default, configurable via `timeout_ms`.
+Lifecycle events that fire at specific points during agent operation.
 
-**GT integration:** Stop hook runs `gt signal kiro-stop` to deliver queued nudges. AgentSpawn runs `gt prime --hook`. UserPromptSubmit runs `gt mail check --inject`.
+| Hook | When it fires | STDOUT behavior |
+|---|---|---|
+| AgentSpawn | Agent is activated | Added to context |
+| UserPromptSubmit | User submits a prompt | Added to context |
+| PreToolUse | Before tool execution (can block) | Not added to context |
+| PostToolUse | After tool execution | Not added to context |
+| Stop | Assistant finishes responding (end of turn) | Captured but NOT added to context |
 
-**Key difference from Claude Code:** Kiro's Stop hook stdout is NOT injected into context. Use tmux send-keys for message delivery. Claude Code's Stop hook returns JSON block/approve that controls the turn.
+Config: `.kiro/agents/<name>.json` → `hooks` field.
+
+**GT integration:** GT installs a `gastown.json` agent config with hooks via the template system (`internal/hooks/templates/kiro/`). Stop hook calls `gt signal kiro-stop`. AgentSpawn calls `gt prime --hook`. UserPromptSubmit calls `gt mail check --inject`.
+
+**Key difference from Claude Code:** Kiro's Stop hook stdout is NOT injected into context. GT uses tmux send-keys for message delivery at turn boundaries. Claude Code's Stop hook returns JSON block/approve that controls the turn directly.
 
 ## Custom Agents
 
-Kiro supports custom agent profiles with:
-- **prompt** — system prompt (inline or file:// URI)
-- **tools** — which tools are available (built-in + MCP)
-- **allowedTools** — tools that don't require permission
-- **toolsSettings** — per-tool config (allowed paths, commands)
-- **resources** — files, skills, knowledge bases loaded into context
-- **hooks** — lifecycle hooks (see above)
-- **model** — model selection
-- **keyboardShortcut** — quick agent switching
+Agent profiles defined in `.kiro/agents/<name>.json`. Support:
+- `prompt` — system prompt (inline or file:// URI)
+- `tools` — available tools (built-in + MCP)
+- `allowedTools` — tools that don't require permission
+- `toolsSettings` — per-tool config (allowed paths, commands)
+- `resources` — files, skills, knowledge bases
+- `hooks` — lifecycle hooks
+- `model` — model selection
+- `keyboardShortcut` — quick switching
 
-Config: `.kiro/agents/<name>.json` (local) or `~/.kiro/agents/<name>.json` (global).
-
-**GT integration:** GT installs a `gastown.json` agent config with hooks. Could also use this to set tool restrictions, resources, and model per-role.
+GT uses this for hook installation. The agent config could also be used for tool restrictions per role, but GT handles role differentiation generally via role templates.
 
 ## Steering Files
 
-Persistent project knowledge in `.kiro/steering/*.md`:
-- **product.md** — product overview, target users, business objectives
-- **tech.md** — frameworks, libraries, tools, constraints
-- **structure.md** — file organization, naming conventions, architecture
+Persistent project knowledge in `.kiro/steering/*.md`. Automatically loaded in every default agent session. Custom agents need explicit `resources` config.
 
-Automatically loaded in every chat session. Custom agents need explicit `resources` config to include them.
+GT uses AGENTS.md (which Kiro reads natively) for project context. Steering files are an alternative discovery mechanism but the content should stay in agent-agnostic docs.
 
-**GT opportunity:** Our PRINCIPLES.md, TESTING.md, and role-specific instructions could be steering files instead of (or in addition to) AGENTS.md. Steering files are purpose-built for this — AGENTS.md is a convention, steering is a native feature.
+## Skills
 
-## Agent Skills
+Auto-activating instruction packages in `.kiro/skills/<name>/SKILL.md`. Activate based on description matching against user requests.
 
-Portable instruction packages in `.kiro/skills/<name>/SKILL.md`:
-- Auto-activate based on description matching
-- Support reference files for detailed docs
-- Workspace-scoped or global
-
-**GT opportunity:** GT roles (witness patrol, refinery merge, polecat work) could be skills. Instead of injecting role instructions via beacon/prompt, define them as skills that activate based on the task. "Review this PR" → pr-review skill activates. "Run patrol" → witness-patrol skill activates.
+GT handles role-specific instructions via role prompt templates (`internal/templates/roles/`), which work across all runtimes. Skills are Kiro-specific and would duplicate the role system.
 
 ## Knowledge Bases
 
-Index large documentation sets for agent search:
-```json
-{
-  "resources": [{
-    "type": "knowledgeBase",
-    "source": "file://./docs",
-    "name": "ProjectDocs",
-    "autoUpdate": true
-  }]
-}
-```
+Native document indexing and search. Configured in agent `resources` field.
 
-**GT opportunity:** The knowledge pipeline (Goal 4) could use Kiro's native knowledge base indexing instead of building custom summarization. Index the codebase docs, let Kiro search them natively.
+GT's Goal 4 (knowledge pipeline) is the general solution for codebase understanding. Knowledge bases are Kiro-specific.
 
 ## MCP Integration
 
-Connect external tools via Model Context Protocol:
-```json
-{
-  "mcpServers": {
-    "git": { "command": "git-mcp", "args": [] }
-  }
-}
-```
+Model Context Protocol — a general standard (not Kiro-specific) for exposing tools to agents. Supported by Kiro, Claude Code, Cursor, and others.
 
-**GT opportunity:** GT commands (`gt status`, `bd list`, `gt convoy list`) could be exposed as MCP tools instead of requiring agents to shell out. This would be faster than CLI invocation and give Kiro structured data.
+**GT opportunity:** Exposing GT/bd commands as an MCP server would benefit all MCP-capable runtimes. Agents get structured data instead of parsing CLI output. Also solves dashboard performance (structured API vs CLI invocation).
 
-## What GT Currently Uses vs What's Available
+## What GT Uses vs What's Available
 
-| Capability | GT uses | Kiro offers | Gap |
+| Capability | GT uses | Available | Notes |
 |---|---|---|---|
-| Lifecycle hooks | ✅ Just added | Stop, Spawn, Prompt, PreTool, PostTool | None now |
-| Agent config | Partial (hooks only) | Full (tools, resources, model, prompt) | Could restrict tools per role |
-| Steering files | AGENTS.md only | `.kiro/steering/*.md` (native) | Could use for PRINCIPLES, TESTING |
-| Skills | Not used | Auto-activating instruction packages | Could define role-specific skills |
-| Knowledge bases | Not used | Native indexing + search | Could replace custom knowledge pipeline |
-| MCP tools | Not used | Structured tool interface | Could expose GT/bd as MCP server |
-| Tool restrictions | Not used | allowedTools, toolsSettings | Could restrict polecats from dangerous ops |
-| Model selection | `--model` flag | Per-agent model config | Could set different models per role |
+| Hooks | ✅ Stop, Spawn, Prompt | All 5 hook types | PreToolUse could guard dangerous ops |
+| Agent config | Hooks only | Full config | Could restrict tools per role |
+| Steering | AGENTS.md | `.kiro/steering/` | AGENTS.md already works |
+| Skills | Not used | Auto-activating | GT role templates are general solution |
+| Knowledge bases | Not used | Native indexing | Goal 4 is general solution |
+| MCP | Not used | Structured tools | Worth doing — general protocol |
+| Tool restrictions | Not used | allowedTools | Solve in GT hooks, not Kiro config |
+| Model selection | GT role_agents | Per-agent model | GT already handles this |

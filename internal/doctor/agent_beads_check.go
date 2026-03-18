@@ -240,7 +240,7 @@ func (c *AgentBeadsCheck) Fix(ctx *CheckContext) error {
 	//   2. If in wisps table (open) → ensure gt:agent label
 	//   3. If exists but closed → REOPEN it (don't recreate)
 	//   4. If truly missing → CREATE it
-	// Uses CreateAgentBead which creates agent beads with --no-history
+	// Uses CreateAgentBead which creates agent beads
 	// (durable issues, not wisps) so they survive wisp GC (GH#2768).
 	// workDir is the rig directory for direct SQL fallback when bd update
 	// fails silently (e.g., legacy prefixes that can't be routed — GH#2127).

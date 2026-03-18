@@ -936,6 +936,7 @@
                                     <th>Pri</th>
                                     <th>ID</th>
                                     <th>Title</th>
+                                    <th>Origin</th>
                                     <th>Status</th>
                                     <th>Age</th>
                                     <th>Actions</th>
@@ -952,6 +953,10 @@
                                     </td>
                                     <td><span class="issue-id">{{linkify .ID}}</span></td>
                                     <td class="issue-title">{{.Title}}</td>
+                                    <td class="issue-origin">
+                                        {{if eq .Origin "agent"}}<span class="badge badge-origin-agent" title="Agent-proposed">🤖</span>
+                                        {{else}}<span class="badge badge-origin-human" title="Human-requested">👤</span>{{end}}
+                                    </td>
                                     <td class="issue-status">
                                         {{if .Assignee}}<span class="badge badge-blue" title="{{.Assignee}}">{{.Assignee}}</span>{{else}}<span class="badge badge-green">Ready</span>{{end}}
                                     </td>
@@ -983,6 +988,7 @@
                                 <span id="issue-detail-type"></span>
                                 <span id="issue-detail-owner"></span>
                                 <span id="issue-detail-created"></span>
+                                <span id="issue-detail-origin"></span>
                             </div>
                             <div id="issue-detail-actions" class="issue-detail-actions"></div>
                             <div class="issue-detail-section">

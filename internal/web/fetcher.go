@@ -1728,7 +1728,7 @@ func runtimeLabelFromConfig(command string, args []string, fallback string) stri
 func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 	// Query both open AND hooked issues for the Work panel
 	// Open = ready to assign, Hooked = in progress
-	var allBeads []struct {
+	type issueBead struct {
 		ID        string   `json:"id"`
 		Title     string   `json:"title"`
 		Type      string   `json:"type"`
@@ -1736,19 +1736,14 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 		Priority  int      `json:"priority"`
 		Labels    []string `json:"labels"`
 		CreatedAt string   `json:"created_at"`
+		CreatedBy string   `json:"created_by"`
 	}
+
+	var allBeads []issueBead
 
 	// Fetch open issues
 	if stdout, err := f.runBdCmd(f.townRoot, "list", "--status=open", "--json", "--limit=50"); err == nil {
-		var openBeads []struct {
-			ID        string   `json:"id"`
-			Title     string   `json:"title"`
-			Type      string   `json:"type"`
-			Status    string   `json:"status"`
-			Priority  int      `json:"priority"`
-			Labels    []string `json:"labels"`
-			CreatedAt string   `json:"created_at"`
-		}
+		var openBeads []issueBead
 		if err := json.Unmarshal(stdout.Bytes(), &openBeads); err == nil {
 			allBeads = append(allBeads, openBeads...)
 		}
@@ -1756,15 +1751,7 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 
 	// Fetch hooked issues (in progress)
 	if stdout, err := f.runBdCmd(f.townRoot, "list", "--status=hooked", "--json", "--limit=50"); err == nil {
-		var hookedBeads []struct {
-			ID        string   `json:"id"`
-			Title     string   `json:"title"`
-			Type      string   `json:"type"`
-			Status    string   `json:"status"`
-			Priority  int      `json:"priority"`
-			Labels    []string `json:"labels"`
-			CreatedAt string   `json:"created_at"`
-		}
+		var hookedBeads []issueBead
 		if err := json.Unmarshal(stdout.Bytes(), &hookedBeads); err == nil {
 			allBeads = append(allBeads, hookedBeads...)
 		}
@@ -1797,6 +1784,7 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 			Type:     bead.Type,
 			Status:   bead.Status,
 			Priority: bead.Priority,
+			Origin:   classifyIssueOrigin(bead.CreatedBy),
 		}
 
 		// Keep full title - CSS handles overflow
@@ -1919,6 +1907,25 @@ func (f *LiveConvoyFetcher) FetchScoreboard() (*ScoreboardData, error) {
 	}
 
 	return sb, nil
+}
+
+// classifyIssueOrigin returns "agent" if created_by looks like an agent path,
+// "human" otherwise.
+func classifyIssueOrigin(createdBy string) string {
+	if createdBy == "" {
+		return "human"
+	}
+	// Agent paths contain "/" (e.g., "gastown/refinery", "gastown/polecats/furiosa")
+	// or are known agent role names
+	if strings.Contains(createdBy, "/") {
+		return "agent"
+	}
+	switch createdBy {
+	case "mayor", "deacon", "witness", "refinery":
+		return "agent"
+	}
+	return "human"
+
 }
 
 // FetchActivity returns recent activity from the event log.

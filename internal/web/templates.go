@@ -133,6 +133,7 @@ type IssueRow struct {
 	Age      string // Time since created
 	Labels   string // Comma-separated labels
 	Assignee string // Who it's hooked to (empty if unassigned)
+	Origin   string // "agent" or "human" — who filed this issue
 }
 
 // ScoreboardData provides a project progress overview grouped by status.

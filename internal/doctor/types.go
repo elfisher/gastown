@@ -18,6 +18,7 @@ const (
 	CategoryConfig        = "Configuration"
 	CategoryCleanup       = "Cleanup"
 	CategoryHooks         = "Hooks"
+	CategoryTriage        = "Triage"
 )
 
 // CategoryOrder defines the display order for categories
@@ -29,6 +30,7 @@ var CategoryOrder = []string{
 	CategoryConfig,
 	CategoryCleanup,
 	CategoryHooks,
+	CategoryTriage,
 }
 
 // CheckStatus represents the result status of a health check.

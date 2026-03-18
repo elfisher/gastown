@@ -17,6 +17,7 @@ var (
 	doctorRestartSessions bool
 	doctorNoStart         bool
 	doctorSlow            string
+	doctorTriage          bool
 )
 
 var doctorCmd = &cobra.Command{
@@ -112,7 +113,8 @@ Patrol checks:
 Use --fix to attempt automatic fixes for issues that support it.
 Use --no-start with --fix to suppress starting the daemon and agents.
 Use --rig to check a specific rig instead of the entire workspace.
-Use --slow to highlight slow checks (default threshold: 1s, e.g. --slow=500ms).`,
+Use --slow to highlight slow checks (default threshold: 1s, e.g. --slow=500ms).
+Use --triage to run triage-specific checks after structural checks.`,
 	RunE: runDoctor,
 }
 
@@ -125,6 +127,7 @@ func init() {
 	doctorCmd.Flags().StringVar(&doctorSlow, "slow", "", "Highlight slow checks (optional threshold, default 1s)")
 	// Allow --slow without a value (uses default 1s)
 	doctorCmd.Flags().Lookup("slow").NoOptDefVal = "1s"
+	doctorCmd.Flags().BoolVar(&doctorTriage, "triage", false, "Run triage-specific checks after structural checks")
 	rootCmd.AddCommand(doctorCmd)
 }
 
@@ -294,6 +297,35 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 
 	// Print summary (checks were already printed during streaming)
 	report.PrintSummaryOnly(os.Stdout, doctorVerbose, slowThreshold)
+
+	// Run triage checks if --triage is set
+	if doctorTriage {
+		triageRunner := doctor.NewTriageRunner()
+		// No triage checks registered yet — framework only.
+		// Future checks will be added via triageRunner.Register().
+
+		triageDoc := triageRunner.Doctor()
+		if len(triageDoc.Checks()) > 0 {
+			fmt.Fprintln(os.Stdout)
+			fmt.Fprintln(os.Stdout, "Triage checks:")
+			var triageReport *doctor.Report
+			if doctorFix {
+				triageReport = triageDoc.FixStreaming(ctx, os.Stdout, slowThreshold)
+			} else {
+				triageReport = triageDoc.RunStreaming(ctx, os.Stdout, slowThreshold)
+			}
+			triageReport.PrintSummaryOnly(os.Stdout, doctorVerbose, slowThreshold)
+
+			// Merge triage errors into exit code
+			if triageReport.HasErrors() {
+				if report.HasErrors() {
+					return fmt.Errorf("doctor found %d structural error(s) and %d triage error(s)",
+						report.Summary.Errors, triageReport.Summary.Errors)
+				}
+				return fmt.Errorf("doctor found %d triage error(s)", triageReport.Summary.Errors)
+			}
+		}
+	}
 
 	// Exit with error code if there are errors
 	if report.HasErrors() {

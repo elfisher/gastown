@@ -2195,6 +2195,7 @@
         document.getElementById('issue-detail-type').textContent = '';
         document.getElementById('issue-detail-created').textContent = '';
         document.getElementById('issue-detail-owner').textContent = '';
+        document.getElementById('issue-detail-origin').innerHTML = '';
         document.getElementById('issue-detail-actions').innerHTML = '';
         document.getElementById('issue-detail-depends-on').innerHTML = '';
         document.getElementById('issue-detail-blocks').innerHTML = '';
@@ -2246,6 +2247,16 @@
                 }
                 if (data.created) {
                     document.getElementById('issue-detail-created').textContent = 'Created: ' + data.created;
+                }
+
+                // Origin badge
+                var originEl = document.getElementById('issue-detail-origin');
+                if (originEl && data.origin) {
+                    if (data.origin === 'agent') {
+                        originEl.innerHTML = '<span class="badge badge-origin-agent" title="Agent-proposed">🤖 Agent-proposed</span>';
+                    } else {
+                        originEl.innerHTML = '<span class="badge badge-origin-human" title="Human-requested">👤 Human-requested</span>';
+                    }
                 }
 
                 // Render action buttons

@@ -115,7 +115,7 @@ Use --fix to attempt automatic fixes for issues that support it.
 Use --no-start with --fix to suppress starting the daemon and agents.
 Use --rig to check a specific rig instead of the entire workspace.
 Use --slow to highlight slow checks (default threshold: 1s, e.g. --slow=500ms).
-Use --triage to run lightweight triage checks (branch existence, ref freshness).`,
+Use --triage to run lightweight triage checks (branch existence, ref freshness, orphaned wisps, stale hooks).`,
 	RunE: runDoctor,
 }
 
@@ -126,7 +126,7 @@ func init() {
 	doctorCmd.Flags().BoolVar(&doctorRestartSessions, "restart-sessions", false, "Restart patrol sessions when fixing stale settings (use with --fix)")
 	doctorCmd.Flags().BoolVar(&doctorNoStart, "no-start", false, "Suppress starting daemon/agents during --fix")
 	doctorCmd.Flags().StringVar(&doctorSlow, "slow", "", "Highlight slow checks (optional threshold, default 1s)")
-	doctorCmd.Flags().BoolVar(&doctorTriage, "triage", false, "Run lightweight triage checks only (branch existence, ref freshness)")
+	doctorCmd.Flags().BoolVar(&doctorTriage, "triage", false, "Run lightweight triage checks only (ref freshness, orphaned wisps, stale hooks)")
 	// Allow --slow without a value (uses default 1s)
 	doctorCmd.Flags().Lookup("slow").NoOptDefVal = "1s"
 	rootCmd.AddCommand(doctorCmd)
@@ -154,6 +154,8 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	if doctorTriage {
 		// Triage mode: lightweight checks only
 		d.Register(doctor.NewRefFreshnessCheck())
+		d.Register(doctor.NewOrphanedWispsTriageCheck())
+		d.Register(doctor.NewStaleHooksTriageCheck())
 	} else {
 		// Full mode: all checks (includes triage checks)
 		registerFullDoctorChecks(d, ctx)
@@ -300,6 +302,10 @@ func registerFullDoctorChecks(d *doctor.Doctor, ctx *doctor.CheckContext) {
 	// Hooks sync check
 	d.Register(doctor.NewStaleTaskDispatchCheck())
 	d.Register(doctor.NewHooksSyncCheck())
+
+	// Triage checks (also available standalone via --triage)
+	d.Register(doctor.NewOrphanedWispsTriageCheck())
+	d.Register(doctor.NewStaleHooksTriageCheck())
 
 	// Dolt data health checks (binary + server reachability moved to top as prerequisites)
 	d.Register(doctor.NewDoltMetadataCheck())

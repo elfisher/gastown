@@ -89,6 +89,7 @@ func outputPrimeContext(ctx RoleContext) (string, error) {
 	}
 
 	fmt.Print(output)
+	fmt.Println("\n---\nRefer to AGENTS.md for project practices and GT.md for operational guidelines.")
 	return output, nil
 }
 

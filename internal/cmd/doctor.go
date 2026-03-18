@@ -17,6 +17,7 @@ var (
 	doctorRestartSessions bool
 	doctorNoStart         bool
 	doctorSlow            string
+	doctorTriage          bool
 )
 
 var doctorCmd = &cobra.Command{
@@ -112,7 +113,8 @@ Patrol checks:
 Use --fix to attempt automatic fixes for issues that support it.
 Use --no-start with --fix to suppress starting the daemon and agents.
 Use --rig to check a specific rig instead of the entire workspace.
-Use --slow to highlight slow checks (default threshold: 1s, e.g. --slow=500ms).`,
+Use --slow to highlight slow checks (default threshold: 1s, e.g. --slow=500ms).
+Use --triage to run triage-specific checks after structural checks.`,
 	RunE: runDoctor,
 }
 
@@ -125,6 +127,7 @@ func init() {
 	doctorCmd.Flags().StringVar(&doctorSlow, "slow", "", "Highlight slow checks (optional threshold, default 1s)")
 	// Allow --slow without a value (uses default 1s)
 	doctorCmd.Flags().Lookup("slow").NoOptDefVal = "1s"
+	doctorCmd.Flags().BoolVar(&doctorTriage, "triage", false, "Run triage-specific checks after structural checks")
 	rootCmd.AddCommand(doctorCmd)
 }
 
@@ -290,6 +293,18 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		report = d.FixStreaming(ctx, os.Stdout, slowThreshold)
 	} else {
 		report = d.RunStreaming(ctx, os.Stdout, slowThreshold)
+	}
+
+	// Run triage checks if --triage is set
+	if doctorTriage {
+		tr := doctor.NewTriageRunner()
+		// Triage checks will be registered here as they are implemented.
+
+		if doctorFix {
+			tr.Fix(ctx, report, os.Stdout, slowThreshold)
+		} else {
+			tr.Run(ctx, report, os.Stdout, slowThreshold)
+		}
 	}
 
 	// Print summary (checks were already printed during streaming)

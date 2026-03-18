@@ -146,6 +146,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		Verbose:         doctorVerbose,
 		RestartSessions: doctorRestartSessions,
 		NoStart:         doctorNoStart,
+		Triage:          doctorTriage,
 	}
 
 	// Create doctor and register checks
@@ -154,6 +155,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	if doctorTriage {
 		// Triage mode: lightweight checks only
 		d.Register(doctor.NewRefFreshnessCheck())
+		d.RegisterAll(doctor.TriageChecks()...)
 	} else {
 		// Full mode: all checks (includes triage checks)
 		registerFullDoctorChecks(d, ctx)

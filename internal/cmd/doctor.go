@@ -17,6 +17,7 @@ var (
 	doctorRestartSessions bool
 	doctorNoStart         bool
 	doctorSlow            string
+	doctorTriage          bool
 )
 
 var doctorCmd = &cobra.Command{
@@ -61,6 +62,7 @@ Clone divergence checks:
   - persistent-role-branches Detect witness/refinery not on main (excludes crew)
   - clone-divergence         Detect clones significantly behind origin/main
   - default-branch-all-rigs  Verify default_branch exists on remote for all rigs
+  - ref-freshness            Verify configured branches exist and refs are fresh (fixable)
   - worktree-gitdir-valid    Verify worktree .git files reference existing paths (fixable)
 
 Crew workspace checks:
@@ -112,7 +114,8 @@ Patrol checks:
 Use --fix to attempt automatic fixes for issues that support it.
 Use --no-start with --fix to suppress starting the daemon and agents.
 Use --rig to check a specific rig instead of the entire workspace.
-Use --slow to highlight slow checks (default threshold: 1s, e.g. --slow=500ms).`,
+Use --slow to highlight slow checks (default threshold: 1s, e.g. --slow=500ms).
+Use --triage to run lightweight triage checks (branch existence, ref freshness).`,
 	RunE: runDoctor,
 }
 
@@ -123,6 +126,7 @@ func init() {
 	doctorCmd.Flags().BoolVar(&doctorRestartSessions, "restart-sessions", false, "Restart patrol sessions when fixing stale settings (use with --fix)")
 	doctorCmd.Flags().BoolVar(&doctorNoStart, "no-start", false, "Suppress starting daemon/agents during --fix")
 	doctorCmd.Flags().StringVar(&doctorSlow, "slow", "", "Highlight slow checks (optional threshold, default 1s)")
+	doctorCmd.Flags().BoolVar(&doctorTriage, "triage", false, "Run lightweight triage checks only (branch existence, ref freshness)")
 	// Allow --slow without a value (uses default 1s)
 	doctorCmd.Flags().Lookup("slow").NoOptDefVal = "1s"
 	rootCmd.AddCommand(doctorCmd)
@@ -147,6 +151,46 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	// Create doctor and register checks
 	d := doctor.NewDoctor()
 
+	if doctorTriage {
+		// Triage mode: lightweight checks only
+		d.Register(doctor.NewRefFreshnessCheck())
+	} else {
+		// Full mode: all checks (includes triage checks)
+		registerFullDoctorChecks(d, ctx)
+	}
+
+	// Parse slow threshold (0 = disabled)
+	var slowThreshold time.Duration
+	if doctorSlow != "" {
+		var err error
+		slowThreshold, err = time.ParseDuration(doctorSlow)
+		if err != nil {
+			return fmt.Errorf("invalid --slow duration %q: %w", doctorSlow, err)
+		}
+	}
+
+	// Run checks with streaming output
+	fmt.Println() // Initial blank line
+	var report *doctor.Report
+	if doctorFix {
+		report = d.FixStreaming(ctx, os.Stdout, slowThreshold)
+	} else {
+		report = d.RunStreaming(ctx, os.Stdout, slowThreshold)
+	}
+
+	// Print summary (checks were already printed during streaming)
+	report.PrintSummaryOnly(os.Stdout, doctorVerbose, slowThreshold)
+
+	// Exit with error code if there are errors
+	if report.HasErrors() {
+		return fmt.Errorf("doctor found %d error(s)", report.Summary.Errors)
+	}
+
+	return nil
+}
+
+// registerFullDoctorChecks registers all checks for the full doctor run.
+func registerFullDoctorChecks(d *doctor.Doctor, ctx *doctor.CheckContext) {
 	// Register workspace-level checks first (fundamental)
 	d.RegisterAll(doctor.WorkspaceChecks()...)
 
@@ -181,11 +225,11 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	d.Register(doctor.NewFormulaCheck())
 	d.Register(doctor.NewPrefixConflictCheck())
 	d.Register(doctor.NewRigNameMismatchCheck())
-	d.Register(doctor.NewRigConfigSyncCheck()) // Check all registered rigs have config.json
-	d.Register(doctor.NewStaleDoltPortCheck()) // Check for stale Dolt port files
+	d.Register(doctor.NewRigConfigSyncCheck())
+	d.Register(doctor.NewStaleDoltPortCheck())
 	d.Register(doctor.NewPrefixMismatchCheck())
 	d.Register(doctor.NewDatabasePrefixCheck())
-	d.Register(doctor.NewIdleTimeoutCheck()) // Verify dolt.idle-timeout: "0" for all rigs
+	d.Register(doctor.NewIdleTimeoutCheck())
 	d.Register(doctor.NewRoutesCheck())
 	d.Register(doctor.NewRigRoutesJSONLCheck())
 	d.Register(doctor.NewRoutingModeCheck())
@@ -202,6 +246,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	d.Register(doctor.NewBranchCheck())
 	d.Register(doctor.NewCloneDivergenceCheck())
 	d.Register(doctor.NewDefaultBranchAllRigsCheck())
+	d.Register(doctor.NewRefFreshnessCheck()) // Triage check: branch existence + ref freshness
 	d.Register(doctor.NewIdentityCollisionCheck())
 	d.Register(doctor.NewLinkedPaneCheck())
 	d.Register(doctor.NewSocketSplitBrainCheck())
@@ -220,14 +265,11 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	d.Register(doctor.NewRigBeadsCheck())
 	d.Register(doctor.NewRoleBeadsCheck())
 
-	// NOTE: StaleAttachmentsCheck removed - staleness detection belongs in Deacon molecule
-
 	// Config architecture checks
 	d.Register(doctor.NewSettingsCheck())
 	d.Register(doctor.NewSessionHookCheck())
 	d.Register(doctor.NewRuntimeGitignoreCheck())
 	d.Register(doctor.NewLegacyGastownCheck())
-	// NOTE: ClaudeSettingsCheck moved before DaemonCheck (gt-99u race fix)
 	d.Register(doctor.NewDeprecatedMergeQueueKeysCheck())
 	d.Register(doctor.NewLandWorktreeGitignoreCheck())
 	d.Register(doctor.NewHooksPathAllRigsCheck())
@@ -272,33 +314,4 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	if doctorRig != "" {
 		d.RegisterAll(doctor.RigChecks()...)
 	}
-
-	// Parse slow threshold (0 = disabled)
-	var slowThreshold time.Duration
-	if doctorSlow != "" {
-		var err error
-		slowThreshold, err = time.ParseDuration(doctorSlow)
-		if err != nil {
-			return fmt.Errorf("invalid --slow duration %q: %w", doctorSlow, err)
-		}
-	}
-
-	// Run checks with streaming output
-	fmt.Println() // Initial blank line
-	var report *doctor.Report
-	if doctorFix {
-		report = d.FixStreaming(ctx, os.Stdout, slowThreshold)
-	} else {
-		report = d.RunStreaming(ctx, os.Stdout, slowThreshold)
-	}
-
-	// Print summary (checks were already printed during streaming)
-	report.PrintSummaryOnly(os.Stdout, doctorVerbose, slowThreshold)
-
-	// Exit with error code if there are errors
-	if report.HasErrors() {
-		return fmt.Errorf("doctor found %d error(s)", report.Summary.Errors)
-	}
-
-	return nil
 }

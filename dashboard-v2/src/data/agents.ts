@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { exec } from "./exec.js";
+import { cached } from "./cache.js";
 import { getSessionOutput } from "./terminal.js";
 import type { Agent, AgentWorkHistoryEntry } from "./schemas.js";
 
@@ -31,18 +32,20 @@ function parseSession(name: string): { rig: string; role: Agent["role"]; agentNa
 
 /** Build a map from beads_prefix (e.g. "gt") to rig name (e.g. "gastown"). */
 async function loadPrefixToRigMap(): Promise<Map<string, string>> {
-  try {
-    const { stdout } = await exec("gt", ["rig", "list", "--json"], {
-      cwd: config.townRoot,
-      timeoutMs: 5_000,
-    });
-    const jsonStart = stdout.indexOf("[");
-    if (jsonStart < 0) return new Map();
-    const rigs = JSON.parse(stdout.slice(jsonStart)) as Array<{ name: string; beads_prefix: string }>;
-    return new Map(rigs.map((r) => [r.beads_prefix, r.name]));
-  } catch {
-    return new Map();
-  }
+  return cached("agents:prefixMap", 30_000, async () => {
+    try {
+      const { stdout } = await exec("gt", ["rig", "list", "--json"], {
+        cwd: config.townRoot,
+        timeoutMs: 5_000,
+      });
+      const jsonStart = stdout.indexOf("[");
+      if (jsonStart < 0) return new Map();
+      const rigs = JSON.parse(stdout.slice(jsonStart)) as Array<{ name: string; beads_prefix: string }>;
+      return new Map(rigs.map((r) => [r.beads_prefix, r.name]));
+    } catch {
+      return new Map();
+    }
+  });
 }
 
 /** Derive the gt hook status target path for an agent. */
@@ -79,27 +82,34 @@ async function getHookedWork(target: string): Promise<string | undefined> {
  * Returns a set of session name prefixes that died within the grace window.
  */
 async function getRecentDeaths(): Promise<Set<string>> {
-  const deaths = new Set<string>();
-  try {
-    const result = await exec(
-      "gt",
-      ["feed", "--plain", "--since", `${RECOVERY_GRACE_SEC}s`],
-      { timeoutMs: 5_000 }
-    );
-    for (const line of result.stdout.split("\n")) {
-      if (/session_death/.test(line)) {
-        // Extract session name: [HH:MM:SS] → <session>  session_death
-        const m = /→\s+([\w-]+)\s+session_death/.exec(line);
-        if (m?.[1]) deaths.add(m[1]);
+  return cached("agents:recentDeaths", 10_000, async () => {
+    const deaths = new Set<string>();
+    try {
+      const result = await exec(
+        "gt",
+        ["feed", "--plain", "--since", `${RECOVERY_GRACE_SEC}s`],
+        { timeoutMs: 5_000 }
+      );
+      for (const line of result.stdout.split("\n")) {
+        if (/session_death/.test(line)) {
+          const m = /→\s+([\w-]+)\s+session_death/.exec(line);
+          if (m?.[1]) deaths.add(m[1]);
+        }
       }
+    } catch {
+      // Feed unavailable — don't block agent listing
     }
-  } catch {
-    // Feed unavailable — don't block agent listing
-  }
-  return deaths;
+    return deaths;
+  });
 }
 
 export async function listAgents(): Promise<Agent[]> {
+  return cached("agents:list", 5_000, async () => {
+    return _listAgentsUncached();
+  });
+}
+
+async function _listAgentsUncached(): Promise<Agent[]> {
   let stdout: string;
   try {
     const result = await exec(

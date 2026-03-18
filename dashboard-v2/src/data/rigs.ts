@@ -1,13 +1,16 @@
 import { join } from "node:path";
 import { config } from "../config.js";
 import { exec } from "./exec.js";
+import { cached } from "./cache.js";
 import { RigListSchema, MergeQueueSchema, type Rig, type MergeQueueItem, type RepoInfo } from "./schemas.js";
 
 export async function listRigs(): Promise<Rig[]> {
-  const result = await exec("gt", ["rig", "list", "--json"], {
-    cwd: config.townRoot,
+  return cached("rigs:list", 10_000, async () => {
+    const result = await exec("gt", ["rig", "list", "--json"], {
+      cwd: config.townRoot,
+    });
+    return RigListSchema.parse(JSON.parse(result.stdout));
   });
-  return RigListSchema.parse(JSON.parse(result.stdout));
 }
 
 export async function getRig(name: string): Promise<Rig | undefined> {

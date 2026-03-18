@@ -39,53 +39,45 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get("/", async (req, reply) => {
     const rig = (req.query as Record<string, string>).rig || undefined;
     const priority = (req.query as Record<string, string>).priority || undefined;
-    const data = await getPipelineData({
-      rig,
-      priority: priority ? parseInt(priority, 10) : undefined,
-    });
-    const html = await withLayout(
-      "Pipeline",
-      renderPipelinePage(data, rig, priority),
-      "/"
-    );
+    const priorityNum = priority ? parseInt(priority, 10) : undefined;
+    const [data, rigs] = await Promise.all([
+      getPipelineData({ rig, priority: priorityNum }),
+      listRigs().catch(() => [] as Rig[]),
+    ]);
+    const content = renderPipelinePage(data, rig, priority);
+    const html = renderLayout("Pipeline", content, rigs, "/");
     return reply.type("text/html").send(html);
   });
 
   app.get("/pipeline", async (req, reply) => {
     const rig = (req.query as Record<string, string>).rig || undefined;
     const priority = (req.query as Record<string, string>).priority || undefined;
-    const data = await getPipelineData({
-      rig,
-      priority: priority ? parseInt(priority, 10) : undefined,
-    });
-    const html = await withLayout(
-      "Pipeline",
-      renderPipelinePage(data, rig, priority),
-      "/pipeline"
-    );
+    const priorityNum = priority ? parseInt(priority, 10) : undefined;
+    const [data, rigs] = await Promise.all([
+      getPipelineData({ rig, priority: priorityNum }),
+      listRigs().catch(() => [] as Rig[]),
+    ]);
+    const content = renderPipelinePage(data, rig, priority);
+    const html = renderLayout("Pipeline", content, rigs, "/pipeline");
     return reply.type("text/html").send(html);
   });
 
   app.get("/agents", async (_req, reply) => {
-    const agents = await listAgents();
-    for (const a of agents) {
-      a.preview = await getAgentPreview(a.session);
-    }
-    const html = await withLayout(
-      "Agents",
-      renderAgentsPage(agents),
-      "/agents"
-    );
+    const [agents, rigs] = await Promise.all([
+      listAgents(),
+      listRigs().catch(() => [] as Rig[]),
+    ]);
+    await Promise.all(agents.map((a) => getAgentPreview(a.session).then((p) => { a.preview = p; })));
+    const html = renderLayout("Agents", renderAgentsPage(agents), rigs, "/agents");
     return reply.type("text/html").send(html);
   });
 
   app.get("/mayor", async (_req, reply) => {
-    const messages = await getMayorMessages();
-    const html = await withLayout(
-      "Mayor",
-      renderMayorPage(messages),
-      "/mayor"
-    );
+    const [messages, rigs] = await Promise.all([
+      getMayorMessages(),
+      listRigs().catch(() => [] as Rig[]),
+    ]);
+    const html = renderLayout("Mayor", renderMayorPage(messages), rigs, "/mayor");
     return reply.type("text/html").send(html);
   });
 
@@ -96,12 +88,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/convoys", async (req, reply) => {
     const all = (req.query as Record<string, string>).all === "true";
-    const convoys = await listConvoys(all);
-    const html = await withLayout(
-      "Convoys",
-      renderConvoyListPage(convoys, all),
-      "/convoys"
-    );
+    const [convoys, rigs] = await Promise.all([
+      listConvoys(all),
+      listRigs().catch(() => [] as Rig[]),
+    ]);
+    const html = renderLayout("Convoys", renderConvoyListPage(convoys, all), rigs, "/convoys");
     return reply.type("text/html").send(html);
   });
 

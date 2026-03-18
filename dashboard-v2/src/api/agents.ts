@@ -5,9 +5,7 @@ import { renderAgentCards, renderAgentOutput } from "../pages/agents.js";
 export async function registerAgentsApi(app: FastifyInstance): Promise<void> {
   app.get("/api/agents", async (_req, reply) => {
     const agents = await listAgents();
-    for (const a of agents) {
-      a.preview = await getAgentPreview(a.session);
-    }
+    await Promise.all(agents.map((a) => getAgentPreview(a.session).then((p) => { a.preview = p; })));
     return reply.type("text/html").send(renderAgentCards(agents));
   });
 

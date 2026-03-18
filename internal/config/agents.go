@@ -434,13 +434,17 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 		ResumeFlag:          "",     // Kiro --resume takes no session ID, not compatible with GT resume
 		ContinueFlag:        "--resume", // --resume without args resumes most recent conversation
 		ResumeStyle:         "flag",
-		SupportsHooks:       false,
+		SupportsHooks:       true,
 		SupportsForkSession: false,
 		NonInteractive:      nil,
 		PromptMode:          "arg",
 		ReadyPromptPrefix:   "",
 		ReadyDelayMs:        20000,
 		InstructionsFile:    "AGENTS.md",
+		HooksProvider:       "kiro",
+		HooksDir:            ".kiro/agents",
+		HooksSettingsFile:   "gastown.json",
+		HasTurnBoundaryDrain: true,
 		CompactCommand:      "/compact Retain: your role, current task, and active work context. Discard: previous task tool outputs and file contents.",
 		CompactThreshold:    50,
 	},

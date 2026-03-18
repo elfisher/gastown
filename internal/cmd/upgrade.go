@@ -13,6 +13,7 @@ import (
 	"github.com/steveyegge/gastown/internal/formula"
 	"github.com/steveyegge/gastown/internal/hooks"
 	"github.com/steveyegge/gastown/internal/style"
+	"github.com/steveyegge/gastown/internal/templates"
 	"github.com/steveyegge/gastown/internal/workspace"
 )
 
@@ -81,8 +82,8 @@ func runUpgrade(cmd *cobra.Command, args []string) error {
 	r1 := upgradeDoctor(townRoot)
 	results = append(results, r1)
 
-	// Step 2: Sync CLAUDE.md from embedded template
-	r2 := upgradeCLAUDEMD(townRoot)
+	// Step 2: Sync GT.md from embedded template (agent-agnostic harness)
+	r2 := upgradeGTMD(townRoot)
 	results = append(results, r2)
 
 	// Step 3: Ensure daemon.json lifecycle defaults
@@ -166,6 +167,55 @@ func upgradeDoctor(townRoot string) upgradeResult {
 		result.details = append(result.details, fmt.Sprintf("%d fixed", result.changed))
 	}
 
+	return result
+}
+
+// upgradeGTMD syncs the town root GT.md from the embedded template.
+// GT.md is the agent-agnostic operational harness — every agent reads it
+// via AGENTS.md which references it. CLAUDE.md is left untouched for
+// Claude Code backward compatibility.
+func upgradeGTMD(townRoot string) upgradeResult {
+	result := upgradeResult{step: "GT.md sync"}
+
+	fmt.Printf("\n  %s %s\n", style.Bold.Render("2."), "Syncing GT.md from template...")
+
+	expected := templates.TownRootGTmd()
+	gtPath := filepath.Join(townRoot, "GT.md")
+
+	current, err := os.ReadFile(gtPath)
+	if err != nil && !os.IsNotExist(err) {
+		result.details = append(result.details, fmt.Sprintf("error reading: %v", err))
+		fmt.Printf("     %s Could not read GT.md: %v\n", style.ErrorPrefix, err)
+		return result
+	}
+
+	if string(current) == expected {
+		fmt.Printf("     %s GT.md %s\n", style.SuccessPrefix, style.Dim.Render("up-to-date"))
+		return result
+	}
+
+	if upgradeDryRun {
+		if os.IsNotExist(err) {
+			fmt.Printf("     %s GT.md %s\n", style.WarningPrefix, style.Dim.Render("would create"))
+		} else {
+			fmt.Printf("     %s GT.md %s\n", style.WarningPrefix, style.Dim.Render("would update"))
+		}
+		result.changed = 1
+		return result
+	}
+
+	if err := os.WriteFile(gtPath, []byte(expected), 0644); err != nil {
+		result.details = append(result.details, fmt.Sprintf("error writing: %v", err))
+		fmt.Printf("     %s Could not write GT.md: %v\n", style.ErrorPrefix, err)
+		return result
+	}
+
+	if os.IsNotExist(err) {
+		fmt.Printf("     %s GT.md %s\n", style.SuccessPrefix, style.Dim.Render("created"))
+	} else {
+		fmt.Printf("     %s GT.md %s\n", style.SuccessPrefix, style.Dim.Render("updated"))
+	}
+	result.changed = 1
 	return result
 }
 

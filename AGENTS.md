@@ -1,11 +1,9 @@
 # Agent Instructions
 
-See **CLAUDE.md** for complete agent context and instructions.
+See **GT.md** for Gas Town operational guidelines (Dolt, communication, escalation).
 
 See [Agent Practices](docs/bounded-yolo/AGENT-PRACTICES.md) for dependency integration, testing, and verification guidelines.
 See [Kiro Capabilities](docs/bounded-yolo/KIRO-CAPABILITIES.md) for Kiro CLI native features reference.
-
-This file exists for compatibility with tools that look for AGENTS.md.
 
 > **Recovery**: Run `gt prime` after compaction, clear, or new session
 

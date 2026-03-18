@@ -18,6 +18,24 @@
     };
 
     // ============================================
+    // LINKIFY — entity ID → clickable link
+    // ============================================
+    // Matches bead IDs (e.g. gt-abc12, hq-cv-xyz) in text and wraps them in <a> tags.
+    var beadIdRe = /\b([a-z]{1,5}(?:-[a-z]{1,5})*-[a-z0-9][a-z0-9._-]*)\b/g;
+
+    function linkify(text) {
+        if (!text) return '';
+        var safe = escapeHtml(text);
+        return safe.replace(beadIdRe, function(match) {
+            if (match.indexOf('-cv-') !== -1) {
+                return '<a href="javascript:void(0)" class="entity-link" onclick="openConvoyDetail(\'' + match + '\')">' + match + '</a>';
+            }
+            return '<a href="javascript:void(0)" class="entity-link" onclick="openIssueDetail(\'' + match + '\')">' + match + '</a>';
+        });
+    }
+    window.linkify = linkify;
+
+    // ============================================
     // SSE (Server-Sent Events) CONNECTION
     // ============================================
     window.sseConnected = false;
@@ -1080,7 +1098,7 @@
                             '<td><span class="crew-name">' + escapeHtml(member.name) + '</span></td>' +
                             '<td><span class="crew-rig">' + escapeHtml(member.rig) + '</span></td>' +
                             '<td><span class="' + stateClass + '">' + stateIcon + stateText + '</span></td>' +
-                            '<td><span class="crew-hook">' + (member.hook ? escapeHtml(member.hook) : '—') + '</span></td>' +
+                            '<td><span class="crew-hook">' + (member.hook ? linkify(member.hook) : '—') + '</span></td>' +
                             '<td class="crew-activity">' + (member.last_active || '—') + '</td>' +
                             '<td>' + sessionBadge + '</td>' +
                             '<td><button class="attach-btn" data-cmd="' + escapeHtml(attachCmd) + '" title="Copy attach command">📎 Attach</button></td>';
@@ -1533,7 +1551,7 @@
 
                         tr.innerHTML =
                             '<td>' + priBadge + '</td>' +
-                            '<td><span class="ready-id">' + escapeHtml(item.id) + '</span></td>' +
+                            '<td><span class="ready-id">' + linkify(item.id) + '</span></td>' +
                             '<td><span class="ready-title">' + escapeHtml(item.title || '') + '</span></td>' +
                             '<td><span class="' + sourceClass + '">' + escapeHtml(item.source) + '</span></td>' +
                             '<td><button class="sling-btn" data-bead-id="' + escapeHtml(item.id) + '" title="Sling to rig">Sling</button></td>';
@@ -1639,7 +1657,7 @@
 
                 tr.innerHTML =
                     '<td class="convoy-issue-status">' + statusBadge + '</td>' +
-                    '<td><span class="issue-id">' + escapeHtml(issue.id) + '</span></td>' +
+                    '<td><span class="issue-id">' + linkify(issue.id) + '</span></td>' +
                     '<td class="issue-title">' + escapeHtml(issue.title || '') + '</td>' +
                     '<td>' + (issue.assignee ? '<span class="badge badge-blue">' + escapeHtml(issue.assignee) + '</span>' : '<span class="badge badge-muted">Unassigned</span>') + '</td>' +
                     '<td>' + escapeHtml(issue.progress || '') + '</td>';
@@ -2195,6 +2213,7 @@
         document.getElementById('issue-detail-type').textContent = '';
         document.getElementById('issue-detail-created').textContent = '';
         document.getElementById('issue-detail-owner').textContent = '';
+        document.getElementById('issue-detail-origin').innerHTML = '';
         document.getElementById('issue-detail-actions').innerHTML = '';
         document.getElementById('issue-detail-depends-on').innerHTML = '';
         document.getElementById('issue-detail-blocks').innerHTML = '';
@@ -2246,6 +2265,16 @@
                 }
                 if (data.created) {
                     document.getElementById('issue-detail-created').textContent = 'Created: ' + data.created;
+                }
+
+                // Origin badge
+                var originEl = document.getElementById('issue-detail-origin');
+                if (originEl && data.origin) {
+                    if (data.origin === 'agent') {
+                        originEl.innerHTML = '<span class="badge badge-origin-agent" title="Agent-proposed">🤖 Agent-proposed</span>';
+                    } else {
+                        originEl.innerHTML = '<span class="badge badge-origin-human" title="Human-requested">👤 Human-requested</span>';
+                    }
                 }
 
                 // Render action buttons
@@ -2992,6 +3021,7 @@
     // ============================================
     var sessionPreviewInterval = null;
     var sessionsTable = null; // will be set when opening preview
+    var sessionPreviewUserScrolled = false; // true when user has scrolled up
 
     // Click on session row to preview terminal output
     document.addEventListener('click', function(e) {
@@ -3007,6 +3037,7 @@
 
     function openSessionPreview(sessionName) {
         window.pauseRefresh = true;
+        sessionPreviewUserScrolled = false;
 
         var preview = document.getElementById('session-preview');
         var nameEl = document.getElementById('session-preview-name');
@@ -3014,6 +3045,12 @@
         var statusEl = document.getElementById('session-preview-status');
 
         if (!preview || !contentEl) return;
+
+        // Track user scroll: if user scrolls away from bottom, stop auto-scrolling
+        contentEl.onscroll = function() {
+            var atBottom = contentEl.scrollHeight - contentEl.scrollTop - contentEl.clientHeight < 40;
+            sessionPreviewUserScrolled = !atBottom;
+        };
 
         // Hide the sessions table, show preview
         sessionsTable = preview.parentNode.querySelector('table');
@@ -3045,8 +3082,10 @@
                     return;
                 }
                 contentEl.textContent = data.content || '(empty)';
-                // Auto-scroll to bottom
-                contentEl.scrollTop = contentEl.scrollHeight;
+                // Auto-scroll to bottom unless user scrolled up
+                if (!sessionPreviewUserScrolled) {
+                    contentEl.scrollTop = contentEl.scrollHeight;
+                }
                 // Show refresh timestamp
                 var now = new Date();
                 var timeStr = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes() + ':' + (now.getSeconds() < 10 ? '0' : '') + now.getSeconds();
@@ -3062,9 +3101,12 @@
             clearInterval(sessionPreviewInterval);
             sessionPreviewInterval = null;
         }
+        sessionPreviewUserScrolled = false;
 
         var preview = document.getElementById('session-preview');
         if (preview) preview.style.display = 'none';
+        var contentEl = document.getElementById('session-preview-content');
+        if (contentEl) contentEl.onscroll = null;
 
         // Show the sessions table again
         if (sessionsTable) sessionsTable.style.display = '';
@@ -3207,7 +3249,7 @@
 
             html += '<tr class="tracked-issue-row tracked-issue-' + escapeHtml(issue.status) + '">' +
                 '<td>' + statusBadge + '</td>' +
-                '<td><span class="issue-id">' + escapeHtml(issue.id) + '</span></td>' +
+                '<td><span class="issue-id">' + linkify(issue.id) + '</span></td>' +
                 '<td class="tracked-issue-title">' + escapeHtml(issue.title) + '</td>' +
                 '<td class="tracked-issue-assignee">' + escapeHtml(assignee) + '</td>' +
                 '<td class="tracked-issue-progress">' + progress + '</td>' +
@@ -3228,5 +3270,9 @@
         html += '</div>';
         cell.innerHTML = html;
     }
+
+    // Expose detail functions for linkify onclick handlers
+    window.openIssueDetail = openIssueDetail;
+    window.openConvoyDetail = openConvoyDetail;
 
 })();

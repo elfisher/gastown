@@ -3,12 +3,19 @@ package web
 
 import (
 	"embed"
+	"html"
 	"html/template"
 	"io/fs"
+	"regexp"
 	"strings"
 
 	"github.com/steveyegge/gastown/internal/activity"
 )
+
+// beadIDRe matches bead IDs in text: 1-5 lowercase letter prefix, hyphen, then
+// alphanumeric/dot/hyphen suffix. Convoy IDs (hq-cv-xxx) are a special case
+// handled by the longer match.
+var beadIDRe = regexp.MustCompile(`\b([a-z]{1,5}(?:-[a-z]{1,5})*-[a-z0-9][a-z0-9._-]*)\b`)
 
 //go:embed templates/*.html
 var templateFS embed.FS
@@ -17,6 +24,7 @@ var templateFS embed.FS
 type ConvoyData struct {
 	Convoys     []ConvoyRow
 	MergeQueue  []MergeQueueRow
+	Pipeline    []PipelineRow
 	Workers     []WorkerRow
 	Mail        []MailRow
 	Rigs        []RigRow
@@ -30,6 +38,8 @@ type ConvoyData struct {
 	Issues      []IssueRow
 	Activity    []ActivityRow
 	Summary     *DashboardSummary
+	Scoreboard  *ScoreboardData
+	Digest      *DigestData
 	Expand      string // Panel to show fullscreen (from ?expand=name)
 	CSRFToken   string // Token for CSRF protection on POST requests
 }
@@ -42,6 +52,7 @@ type RigRow struct {
 	CrewCount    int
 	HasWitness   bool
 	HasRefinery  bool
+	TargetBranch string // Active target branch (e.g., "main", "dashboard-v2"); empty if no active work
 }
 
 // DogRow represents a Deacon helper worker.
@@ -119,9 +130,30 @@ type IssueRow struct {
 	Title    string // Issue title
 	Type     string // issue, bug, feature, task
 	Priority int    // 1=critical, 2=high, 3=medium, 4=low
+	Status   string // open, hooked, closed, in_progress, blocked, deferred
 	Age      string // Time since created
 	Labels   string // Comma-separated labels
 	Assignee string // Who it's hooked to (empty if unassigned)
+	Origin   string // "agent" or "human" — who filed this issue
+}
+
+// ScoreboardData provides a project progress overview grouped by status.
+type ScoreboardData struct {
+	Done        []ScoreboardItem
+	InProgress  []ScoreboardItem
+	Open        []ScoreboardItem
+	DoneCount   int
+	InProgCount int
+	OpenCount   int
+	Total       int
+	DonePct     int // 0-100
+	InProgPct   int // 0-100
+}
+
+// ScoreboardItem is a single issue in the scoreboard.
+type ScoreboardItem struct {
+	ID    string
+	Title string
 }
 
 // ActivityRow represents an event in the activity feed.
@@ -134,6 +166,21 @@ type ActivityRow struct {
 	Rig          string // Rig name extracted from actor (e.g., "gastown")
 	Summary      string // Human-readable description
 	RawTimestamp string // ISO 8601 timestamp for JS sorting/filtering
+}
+
+// DigestData provides an overnight activity summary for returning users.
+type DigestData struct {
+	Available    bool   // Whether there's meaningful overnight activity
+	Period       string // e.g., "last 8 hours"
+	MergesLanded int    // Branches merged to main
+	MergeFails   int    // Merge failures
+	WorkDone     int    // Beads completed (done events)
+	Spawns       int    // Polecats spawned
+	Deaths       int    // Session deaths
+	Escalations  int    // Escalations sent
+	MailSent     int    // Mail messages sent
+	Slings       int    // Work items slung to agents
+	TotalEvents  int    // Total events in the period
 }
 
 // DashboardSummary provides at-a-glance stats and alerts.
@@ -182,6 +229,7 @@ type WorkerRow struct {
 	IssueTitle   string        // Issue title (truncated)
 	WorkStatus   string        // working, stale, stuck, idle
 	AgentType    string        // "polecat" (ephemeral sessions) or "refinery" (permanent)
+	TargetBranch string        // Base branch this worker targets (e.g., "main", "dashboard-v2")
 }
 
 // MergeQueueRow represents a PR in the merge queue.
@@ -193,6 +241,19 @@ type MergeQueueRow struct {
 	CIStatus   string // "pass", "fail", "pending"
 	Mergeable  string // "ready", "conflict", "pending"
 	ColorClass string // "mq-green", "mq-yellow", "mq-red"
+}
+
+// PipelineRow represents an MR being processed by the refinery.
+type PipelineRow struct {
+	ID       string // MR bead ID
+	Branch   string // Source branch
+	Target   string // Target branch
+	Worker   string // Polecat that submitted
+	Rig      string // Rig name
+	Phase    string // ready, claimed, preparing, merging, merged, rejected, failed
+	Age      string // Time since created
+	Position int    // 1-based position in queue
+	Total    int    // Total MRs in pipeline for this rig
 }
 
 // ConvoyRow represents a single convoy in the dashboard.
@@ -232,7 +293,9 @@ func LoadTemplates() (*template.Template, error) {
 		"dogStateClass":      dogStateClass,
 		"queueStatusClass":   queueStatusClass,
 		"polecatStatusClass": polecatStatusClass,
-		"activityTypeClass": activityTypeClass,
+		"activityTypeClass":  activityTypeClass,
+		"pipelinePhaseClass": pipelinePhaseClass,
+		"linkify":            Linkify,
 		"contains": func(s, substr string) bool {
 			return strings.Contains(s, substr)
 		},
@@ -251,6 +314,20 @@ func LoadTemplates() (*template.Template, error) {
 	}
 
 	return tmpl, nil
+}
+
+// Linkify finds bead/convoy IDs in text and wraps them in clickable <a> tags.
+// Convoy IDs (containing "-cv-") link to openConvoyDetail; all other bead IDs
+// link to openIssueDetail.
+func Linkify(text string) template.HTML {
+	escaped := html.EscapeString(text)
+	result := beadIDRe.ReplaceAllStringFunc(escaped, func(match string) string {
+		if strings.Contains(match, "-cv-") {
+			return `<a href="javascript:void(0)" class="entity-link" onclick="openConvoyDetail('` + match + `')">` + match + `</a>`
+		}
+		return `<a href="javascript:void(0)" class="entity-link" onclick="openIssueDetail('` + match + `')">` + match + `</a>`
+	})
+	return template.HTML(result) // #nosec G203 -- output is escaped above, only safe markup added
 }
 
 // activityClass returns the CSS class for an activity color.
@@ -392,5 +469,21 @@ func activityTypeClass(category string) string {
 		return "tl-cat-system"
 	default:
 		return "tl-cat-default"
+	}
+}
+
+// pipelinePhaseClass returns CSS class for a pipeline MR phase.
+func pipelinePhaseClass(phase string) string {
+	switch phase {
+	case "preparing":
+		return "pipeline-preparing"
+	case "merging":
+		return "pipeline-merging"
+	case "merged":
+		return "pipeline-merged"
+	case "rejected", "failed":
+		return "pipeline-failed"
+	default:
+		return "pipeline-ready"
 	}
 }

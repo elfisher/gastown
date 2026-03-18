@@ -139,16 +139,17 @@ type AgentRuntime struct {
 
 // RigStatus represents status of a single rig.
 type RigStatus struct {
-	Name         string          `json:"name"`
-	Polecats     []string        `json:"polecats"`
-	PolecatCount int             `json:"polecat_count"`
-	Crews        []string        `json:"crews"`
-	CrewCount    int             `json:"crew_count"`
-	HasWitness   bool            `json:"has_witness"`
-	HasRefinery  bool            `json:"has_refinery"`
-	Hooks        []AgentHookInfo `json:"hooks,omitempty"`
-	Agents       []AgentRuntime  `json:"agents,omitempty"` // Runtime state of all agents in rig
-	MQ           *MQSummary      `json:"mq,omitempty"`     // Merge queue summary
+	Name         string           `json:"name"`
+	Polecats     []string         `json:"polecats"`
+	PolecatCount int              `json:"polecat_count"`
+	Crews        []string         `json:"crews"`
+	CrewCount    int              `json:"crew_count"`
+	HasWitness   bool             `json:"has_witness"`
+	HasRefinery  bool             `json:"has_refinery"`
+	Hooks        []AgentHookInfo  `json:"hooks,omitempty"`
+	Agents       []AgentRuntime   `json:"agents,omitempty"` // Runtime state of all agents in rig
+	MQ           *MQSummary       `json:"mq,omitempty"`     // Merge queue summary
+	Convoys      []ConvoyProgress `json:"convoys,omitempty"` // Convoy progress summaries
 }
 
 // MQSummary represents the merge queue status for a rig.
@@ -158,6 +159,15 @@ type MQSummary struct {
 	Blocked  int    `json:"blocked"`   // MRs waiting on dependencies
 	State    string `json:"state"`     // idle, processing, or blocked
 	Health   string `json:"health"`    // healthy, stale, or empty
+}
+
+// ConvoyProgress represents a convoy's progress for human-meaningful display.
+type ConvoyProgress struct {
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	Completed  int    `json:"completed"`
+	Total      int    `json:"total"`
+	InProgress int    `json:"in_progress"`
 }
 
 // AgentHookInfo represents an agent's hook (pinned work) status.
@@ -908,6 +918,11 @@ func gatherStatus() (TownStatus, error) {
 				rs.MQ = getMQSummary(r)
 			}
 
+			// Get convoy progress for human-meaningful status
+			if !statusFast {
+				rs.Convoys = getConvoyProgress(r)
+			}
+
 			status.Rigs[idx] = rs
 		}(i, r)
 	}
@@ -974,64 +989,70 @@ func outputStatusText(w io.Writer, status TownStatus) error {
 	}
 
 	// Current agent notification mode (DND)
-	if status.DND != nil {
-		icon := "🔔"
-		state := "off"
-		desc := "notifications normal"
-		if status.DND.Enabled {
-			icon = "🔕"
-			state = "on"
-			desc = "notifications muted"
-		}
-		fmt.Fprintf(w, "%s %s %s", icon, style.Bold.Render("DND:"), style.Bold.Render(state))
-		if status.DND.Agent != "" {
-			fmt.Fprintf(w, " %s", style.Dim.Render("("+status.DND.Agent+")"))
-		}
-		fmt.Fprintf(w, "\n   %s\n\n", style.Dim.Render(desc))
+	if status.DND != nil && status.DND.Enabled {
+		fmt.Fprintf(w, "🔕 %s %s\n\n", style.Bold.Render("DND:"), style.Bold.Render("on"))
 	}
 
-	// Infrastructure services
-	if status.Daemon != nil || status.Dolt != nil || status.Tmux != nil {
-		fmt.Fprintf(w, "%s ", style.Bold.Render("Services:"))
-		var parts []string
-		if status.Daemon != nil {
-			if status.Daemon.Running {
-				parts = append(parts, fmt.Sprintf("daemon %s", style.Dim.Render(fmt.Sprintf("(PID %d)", status.Daemon.PID))))
-			} else {
-				parts = append(parts, fmt.Sprintf("daemon %s", style.Dim.Render("(stopped)")))
+	// Infrastructure services — verbose only (implementation detail)
+	if statusVerbose {
+		if status.DND != nil {
+			icon := "🔔"
+			state := "off"
+			desc := "notifications normal"
+			if status.DND.Enabled {
+				icon = "🔕"
+				state = "on"
+				desc = "notifications muted"
 			}
+			fmt.Fprintf(w, "%s %s %s", icon, style.Bold.Render("DND:"), style.Bold.Render(state))
+			if status.DND.Agent != "" {
+				fmt.Fprintf(w, " %s", style.Dim.Render("("+status.DND.Agent+")"))
+			}
+			fmt.Fprintf(w, "\n   %s\n\n", style.Dim.Render(desc))
 		}
-		if status.Dolt != nil {
-			if status.Dolt.Remote {
-				parts = append(parts, fmt.Sprintf("dolt %s", style.Dim.Render(fmt.Sprintf("(remote :%d)", status.Dolt.Port))))
-			} else if status.Dolt.Running {
-				dataDir := status.Dolt.DataDir
-				if home, err := os.UserHomeDir(); err == nil {
-					dataDir = strings.Replace(dataDir, home, "~", 1)
+
+		if status.Daemon != nil || status.Dolt != nil || status.Tmux != nil {
+			fmt.Fprintf(w, "%s ", style.Bold.Render("Services:"))
+			var parts []string
+			if status.Daemon != nil {
+				if status.Daemon.Running {
+					parts = append(parts, fmt.Sprintf("daemon %s", style.Dim.Render(fmt.Sprintf("(PID %d)", status.Daemon.PID))))
+				} else {
+					parts = append(parts, fmt.Sprintf("daemon %s", style.Dim.Render("(stopped)")))
 				}
-				parts = append(parts, fmt.Sprintf("dolt %s", style.Dim.Render(fmt.Sprintf("(PID %d, :%d, %s)", status.Dolt.PID, status.Dolt.Port, dataDir))))
-			} else if status.Dolt.PortConflict {
-				parts = append(parts, fmt.Sprintf("dolt %s", style.Bold.Render(fmt.Sprintf("(stopped, :%d ⚠ port used by %s)", status.Dolt.Port, status.Dolt.ConflictOwner))))
-			} else {
-				parts = append(parts, fmt.Sprintf("dolt %s", style.Dim.Render(fmt.Sprintf("(stopped, :%d)", status.Dolt.Port))))
 			}
-		}
-		if status.Tmux != nil {
-			if status.Tmux.Running {
-				parts = append(parts, fmt.Sprintf("tmux %s", style.Dim.Render(fmt.Sprintf("(-L %s, PID %d, %d sessions, %s)", status.Tmux.Socket, status.Tmux.PID, status.Tmux.SessionCount, status.Tmux.SocketPath))))
-			} else {
-				parts = append(parts, fmt.Sprintf("tmux %s", style.Dim.Render(fmt.Sprintf("(-L %s, no server)", status.Tmux.Socket))))
+			if status.Dolt != nil {
+				if status.Dolt.Remote {
+					parts = append(parts, fmt.Sprintf("dolt %s", style.Dim.Render(fmt.Sprintf("(remote :%d)", status.Dolt.Port))))
+				} else if status.Dolt.Running {
+					dataDir := status.Dolt.DataDir
+					if home, err := os.UserHomeDir(); err == nil {
+						dataDir = strings.Replace(dataDir, home, "~", 1)
+					}
+					parts = append(parts, fmt.Sprintf("dolt %s", style.Dim.Render(fmt.Sprintf("(PID %d, :%d, %s)", status.Dolt.PID, status.Dolt.Port, dataDir))))
+				} else if status.Dolt.PortConflict {
+					parts = append(parts, fmt.Sprintf("dolt %s", style.Bold.Render(fmt.Sprintf("(stopped, :%d ⚠ port used by %s)", status.Dolt.Port, status.Dolt.ConflictOwner))))
+				} else {
+					parts = append(parts, fmt.Sprintf("dolt %s", style.Dim.Render(fmt.Sprintf("(stopped, :%d)", status.Dolt.Port))))
+				}
 			}
-		}
-		if status.ACP != nil {
-			if status.ACP.Running {
-				parts = append(parts, fmt.Sprintf("acp %s", style.Dim.Render(fmt.Sprintf("(PID %d)", status.ACP.PID))))
-			} else {
-				parts = append(parts, fmt.Sprintf("acp %s", style.Dim.Render("(stopped)")))
+			if status.Tmux != nil {
+				if status.Tmux.Running {
+					parts = append(parts, fmt.Sprintf("tmux %s", style.Dim.Render(fmt.Sprintf("(-L %s, PID %d, %d sessions, %s)", status.Tmux.Socket, status.Tmux.PID, status.Tmux.SessionCount, status.Tmux.SocketPath))))
+				} else {
+					parts = append(parts, fmt.Sprintf("tmux %s", style.Dim.Render(fmt.Sprintf("(-L %s, no server)", status.Tmux.Socket))))
+				}
 			}
+			if status.ACP != nil {
+				if status.ACP.Running {
+					parts = append(parts, fmt.Sprintf("acp %s", style.Dim.Render(fmt.Sprintf("(PID %d)", status.ACP.PID))))
+				} else {
+					parts = append(parts, fmt.Sprintf("acp %s", style.Dim.Render("(stopped)")))
+				}
+			}
+			fmt.Fprintf(w, "%s\n", strings.Join(parts, "  "))
+			fmt.Fprintln(w)
 		}
-		fmt.Fprintf(w, "%s\n", strings.Join(parts, "  "))
-		fmt.Fprintln(w)
 	}
 
 	// Role icons - uses centralized emojis from constants package
@@ -1091,91 +1112,147 @@ func outputStatusText(w io.Writer, status TownStatus) error {
 			}
 		}
 
-		// Witness
-		if len(witnesses) > 0 {
-			if statusVerbose {
-				fmt.Fprintf(w, "%s %s\n", roleIcons[constants.RoleWitness], style.Bold.Render("Witness"))
-				for _, agent := range witnesses {
-					renderAgentDetails(w, agent, "   ", r.Hooks, status.Location)
-				}
-				fmt.Fprintln(w)
-			} else {
-				for _, agent := range witnesses {
-					renderAgentCompact(w, agent, roleIcons[constants.RoleWitness]+" ", r.Hooks, status.Location)
-				}
-			}
-		}
-
-		// Refinery
-		if len(refineries) > 0 {
-			if statusVerbose {
-				fmt.Fprintf(w, "%s %s\n", roleIcons[constants.RoleRefinery], style.Bold.Render("Refinery"))
-				for _, agent := range refineries {
-					renderAgentDetails(w, agent, "   ", r.Hooks, status.Location)
-				}
-				// MQ summary (shown under refinery)
-				if r.MQ != nil {
-					mqStr := formatMQSummary(r.MQ)
-					if mqStr != "" {
-						fmt.Fprintf(w, "   MQ: %s\n", mqStr)
-					}
-				}
-				fmt.Fprintln(w)
-			} else {
-				for _, agent := range refineries {
-					// Compact: include MQ on same line if present
-					mqSuffix := ""
-					if r.MQ != nil {
-						mqStr := formatMQSummaryCompact(r.MQ)
-						if mqStr != "" {
-							mqSuffix = "  " + mqStr
-						}
-					}
-					renderAgentCompactWithSuffix(w, agent, roleIcons[constants.RoleRefinery]+" ", r.Hooks, status.Location, mqSuffix)
-				}
-			}
-		}
-
-		// Crew
-		if len(crews) > 0 {
-			if statusVerbose {
-				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RoleCrew], style.Bold.Render("Crew"), len(crews))
-				for _, agent := range crews {
-					renderAgentDetails(w, agent, "   ", r.Hooks, status.Location)
-				}
-				fmt.Fprintln(w)
-			} else {
-				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RoleCrew], style.Bold.Render("Crew"), len(crews))
-				for _, agent := range crews {
-					renderAgentCompact(w, agent, "   ", r.Hooks, status.Location)
-				}
-			}
-		}
-
-		// Polecats
-		if len(polecats) > 0 {
-			if statusVerbose {
-				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RolePolecat], style.Bold.Render("Polecats"), len(polecats))
-				for _, agent := range polecats {
-					renderAgentDetails(w, agent, "   ", r.Hooks, status.Location)
-				}
-				fmt.Fprintln(w)
-			} else {
-				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RolePolecat], style.Bold.Render("Polecats"), len(polecats))
-				for _, agent := range polecats {
-					renderAgentCompact(w, agent, "   ", r.Hooks, status.Location)
-				}
-			}
-		}
-
-		// No agents
-		if len(witnesses) == 0 && len(refineries) == 0 && len(crews) == 0 && len(polecats) == 0 {
-			fmt.Fprintf(w, "   %s\n", style.Dim.Render("(no agents)"))
+		if statusVerbose {
+			// Verbose: show full per-agent detail (existing behavior)
+			outputRigVerbose(w, r, roleIcons, witnesses, refineries, crews, polecats, status.Location)
+		} else {
+			// Default: show project-level progress, hide polecat machinery
+			outputRigCompact(w, r, roleIcons, witnesses, refineries, crews, polecats, status.Location)
 		}
 		fmt.Fprintln(w)
 	}
 
 	return nil
+}
+
+// outputRigCompact renders a rig with project-level progress (default mode).
+// Shows convoy progress, running agent count, and MQ status.
+// Hides individual polecat names, sessions, mail counts.
+func outputRigCompact(w io.Writer, r RigStatus, roleIcons map[string]string, witnesses, refineries, crews, polecats []AgentRuntime, townRoot string) {
+	// Convoy progress — the human-meaningful view
+	if len(r.Convoys) > 0 {
+		for _, c := range r.Convoys {
+			remaining := c.Total - c.Completed - c.InProgress
+			var progressParts []string
+			if c.Completed > 0 {
+				progressParts = append(progressParts, fmt.Sprintf("%d merged", c.Completed))
+			}
+			if c.InProgress > 0 {
+				progressParts = append(progressParts, fmt.Sprintf("%d in progress", c.InProgress))
+			}
+			if remaining > 0 {
+				progressParts = append(progressParts, fmt.Sprintf("%d queued", remaining))
+			}
+			title := truncateWithEllipsis(c.Title, 40)
+			if len(progressParts) > 0 {
+				fmt.Fprintf(w, "   🚚 %s: %d/%d — %s\n", title, c.Completed, c.Total, strings.Join(progressParts, ", "))
+			} else {
+				fmt.Fprintf(w, "   🚚 %s: %d/%d\n", title, c.Completed, c.Total)
+			}
+		}
+		fmt.Fprintln(w)
+	}
+
+	// Summary line: running agents + MQ
+	var summaryParts []string
+
+	// Count running agents by role
+	runningPolecats := 0
+	for _, a := range polecats {
+		if a.Running {
+			runningPolecats++
+		}
+	}
+	if len(polecats) > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%s %d/%d workers", roleIcons[constants.RolePolecat], runningPolecats, len(polecats)))
+	}
+
+	// Witness/Refinery as status indicators
+	for _, a := range witnesses {
+		indicator := style.Error.Render("○")
+		if a.Running {
+			indicator = style.Success.Render("●")
+		}
+		summaryParts = append(summaryParts, fmt.Sprintf("%s %s", roleIcons[constants.RoleWitness], indicator))
+	}
+	for _, a := range refineries {
+		indicator := style.Error.Render("○")
+		if a.Running {
+			indicator = style.Success.Render("●")
+		}
+		mqSuffix := ""
+		if r.MQ != nil {
+			mqStr := formatMQSummaryCompact(r.MQ)
+			if mqStr != "" {
+				mqSuffix = " " + mqStr
+			}
+		}
+		summaryParts = append(summaryParts, fmt.Sprintf("%s %s%s", roleIcons[constants.RoleRefinery], indicator, mqSuffix))
+	}
+
+	if len(crews) > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%s %d crew", roleIcons[constants.RoleCrew], len(crews)))
+	}
+
+	if len(summaryParts) > 0 {
+		fmt.Fprintf(w, "   %s\n", strings.Join(summaryParts, "  "))
+	}
+
+	// No convoys and no agents
+	if len(r.Convoys) == 0 && len(summaryParts) == 0 {
+		fmt.Fprintf(w, "   %s\n", style.Dim.Render("(no activity)"))
+	}
+}
+
+// outputRigVerbose renders a rig with full per-agent detail (--verbose mode).
+func outputRigVerbose(w io.Writer, r RigStatus, roleIcons map[string]string, witnesses, refineries, crews, polecats []AgentRuntime, townRoot string) {
+	// Witness
+	if len(witnesses) > 0 {
+		fmt.Fprintf(w, "%s %s\n", roleIcons[constants.RoleWitness], style.Bold.Render("Witness"))
+		for _, agent := range witnesses {
+			renderAgentDetails(w, agent, "   ", r.Hooks, townRoot)
+		}
+		fmt.Fprintln(w)
+	}
+
+	// Refinery
+	if len(refineries) > 0 {
+		fmt.Fprintf(w, "%s %s\n", roleIcons[constants.RoleRefinery], style.Bold.Render("Refinery"))
+		for _, agent := range refineries {
+			renderAgentDetails(w, agent, "   ", r.Hooks, townRoot)
+		}
+		// MQ summary (shown under refinery)
+		if r.MQ != nil {
+			mqStr := formatMQSummary(r.MQ)
+			if mqStr != "" {
+				fmt.Fprintf(w, "   MQ: %s\n", mqStr)
+			}
+		}
+		fmt.Fprintln(w)
+	}
+
+	// Crew
+	if len(crews) > 0 {
+		fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RoleCrew], style.Bold.Render("Crew"), len(crews))
+		for _, agent := range crews {
+			renderAgentDetails(w, agent, "   ", r.Hooks, townRoot)
+		}
+		fmt.Fprintln(w)
+	}
+
+	// Polecats
+	if len(polecats) > 0 {
+		fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RolePolecat], style.Bold.Render("Polecats"), len(polecats))
+		for _, agent := range polecats {
+			renderAgentDetails(w, agent, "   ", r.Hooks, townRoot)
+		}
+		fmt.Fprintln(w)
+	}
+
+	// No agents
+	if len(witnesses) == 0 && len(refineries) == 0 && len(crews) == 0 && len(polecats) == 0 {
+		fmt.Fprintf(w, "   %s\n", style.Dim.Render("(no agents)"))
+	}
 }
 
 // renderAgentDetails renders full agent bead details
@@ -1876,6 +1953,49 @@ func getMQSummary(r *rig.Rig) *MQSummary {
 		State:    state,
 		Health:   health,
 	}
+}
+
+// getConvoyProgress queries beads for open convoys and returns progress summaries.
+func getConvoyProgress(r *rig.Rig) []ConvoyProgress {
+	b := beads.New(r.BeadsPath())
+
+	convoys, err := b.List(beads.ListOptions{
+		Label:    "gt:convoy",
+		Status:   "open",
+		Priority: -1,
+	})
+	if err != nil || len(convoys) == 0 {
+		return nil
+	}
+
+	var result []ConvoyProgress
+	for _, c := range convoys {
+		cp := ConvoyProgress{
+			ID:    c.ID,
+			Title: c.Title,
+		}
+
+		// Get tracked children to compute progress
+		children, err := b.List(beads.ListOptions{
+			Parent:   c.ID,
+			Status:   "all",
+			Priority: -1,
+		})
+		if err != nil {
+			continue
+		}
+		cp.Total = len(children)
+		for _, ch := range children {
+			switch ch.Status {
+			case "closed":
+				cp.Completed++
+			case "in_progress", "hooked":
+				cp.InProgress++
+			}
+		}
+		result = append(result, cp)
+	}
+	return result
 }
 
 // getAgentHook retrieves hook status for a specific agent.

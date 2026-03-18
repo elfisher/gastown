@@ -1229,3 +1229,49 @@ func lookupPriorAttempt(beadsDir, issueID string) []string {
 	}
 	return vars
 }
+
+// detectRigActiveBranch checks active polecat worktrees in a rig to find the
+// dominant target branch. Returns the most common non-main branch, or "main"
+// if that's all there is, or empty string if no active polecats.
+func detectRigActiveBranch(rigPath string) string {
+	polecatsDir := filepath.Join(rigPath, "polecats")
+	entries, err := os.ReadDir(polecatsDir)
+	if err != nil {
+		return ""
+	}
+
+	rigName := filepath.Base(rigPath)
+	counts := make(map[string]int)
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		worktree := filepath.Join(polecatsDir, e.Name(), rigName)
+		gitFile := filepath.Join(worktree, ".git")
+		if _, err := os.Stat(gitFile); err != nil {
+			continue
+		}
+		out, err := exec.Command("git", "-C", worktree, "rev-parse", "--abbrev-ref", "@{upstream}").Output()
+		if err != nil {
+			continue
+		}
+		branch := strings.TrimPrefix(strings.TrimSpace(string(out)), "origin/")
+		if branch != "" && branch != "HEAD" {
+			counts[branch]++
+		}
+	}
+
+	if len(counts) == 0 {
+		return ""
+	}
+
+	best := ""
+	bestCount := 0
+	for b, c := range counts {
+		if c > bestCount || (c == bestCount && b != "main") {
+			best = b
+			bestCount = c
+		}
+	}
+	return best
+}

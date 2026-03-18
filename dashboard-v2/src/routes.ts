@@ -15,6 +15,9 @@ import { renderConvoyListPage } from "./pages/convoy-list.js";
 import { registerPipelineApi } from "./api/pipeline.js";
 import { renderAgentsPage, renderAgentDetailPage } from "./pages/agents.js";
 import { registerAgentsApi } from "./api/agents.js";
+import { getProjectsData } from "./data/projects.js";
+import { renderProjectsPage } from "./pages/projects.js";
+import { registerProjectsApi } from "./api/projects.js";
 import type { Rig } from "./data/schemas.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -105,14 +108,37 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.type("text/html").send(html);
   });
 
-  app.get("/overview", async (_req, reply) => {
-    const html = await withLayout(
-      "Project Overview",
-      placeholder("Project Overview"),
-      "/overview"
-    );
-    return reply.type("text/html").send(html);
-  });
+  app.get<{ Querystring: { search?: string; status?: string } }>(
+    "/overview",
+    async (req, reply) => {
+      const data = await getProjectsData({
+        search: req.query.search || undefined,
+        status: req.query.status || undefined,
+      });
+      const html = await withLayout(
+        "Project Overview",
+        renderProjectsPage(data, req.query.search, req.query.status),
+        "/overview"
+      );
+      return reply.type("text/html").send(html);
+    }
+  );
+
+  app.get<{ Querystring: { search?: string; status?: string } }>(
+    "/projects",
+    async (req, reply) => {
+      const data = await getProjectsData({
+        search: req.query.search || undefined,
+        status: req.query.status || undefined,
+      });
+      const html = await withLayout(
+        "Project Overview",
+        renderProjectsPage(data, req.query.search, req.query.status),
+        "/overview"
+      );
+      return reply.type("text/html").send(html);
+    }
+  );
 
   app.get<{ Params: { name: string } }>(
     "/rig/:name",
@@ -172,4 +198,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerMayorApi(app);
   await registerPipelineApi(app);
   await registerAgentsApi(app);
+  await registerProjectsApi(app);
 }

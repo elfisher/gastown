@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { listRigs } from "./data/rigs.js";
 import { getMayorMessages } from "./data/mayor.js";
 import { getPipelineData } from "./data/pipeline.js";
-import { listAgents, getAgentPreview, getAgentOutput } from "./data/agents.js";
+import { listAgents, getAgentPreview, getAgentOutput, getAgentSessionInfo, getAgentWorkHistory } from "./data/agents.js";
 import { listConvoys } from "./data/convoys.js";
 import { renderLayout } from "./pages/layout.js";
 import { renderMayorPage } from "./pages/mayor.js";
@@ -10,15 +10,14 @@ import { renderPipelinePage } from "./pages/pipeline.js";
 import { registerMayorApi } from "./api/mayor.js";
 import { renderRigPage } from "./pages/rig.js";
 import { renderConvoyPage } from "./pages/convoy.js";
-
-import { renderBeadPage } from "./pages/bead.js";
-
 import { renderConvoyListPage } from "./pages/convoy-list.js";
-
 import { registerPipelineApi } from "./api/pipeline.js";
 import { renderAgentsPage, renderAgentDetailPage } from "./pages/agents.js";
 import { registerAgentsApi } from "./api/agents.js";
+import { registerProjectsApi } from "./api/projects.js";
 import { renderTourPage } from "./pages/tour.js";
+import { renderProjectsPage } from "./pages/projects.js";
+import { getProjectsData } from "./data/projects.js";
 import type { Rig } from "./data/schemas.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -108,10 +107,29 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.type("text/html").send(html);
   });
 
-  app.get("/overview", async (_req, reply) => {
+  app.get("/overview", async (req, reply) => {
+    const q = req.query as Record<string, string>;
+    const data = await getProjectsData({
+      search: q.search || undefined,
+      status: q.status || undefined,
+    });
     const html = await withLayout(
       "Project Overview",
-      placeholder("Project Overview"),
+      renderProjectsPage(data, q.search, q.status),
+      "/overview"
+    );
+    return reply.type("text/html").send(html);
+  });
+
+  app.get("/projects", async (req, reply) => {
+    const q = req.query as Record<string, string>;
+    const data = await getProjectsData({
+      search: q.search || undefined,
+      status: q.status || undefined,
+    });
+    const html = await withLayout(
+      "Project Overview",
+      renderProjectsPage(data, q.search, q.status),
       "/overview"
     );
     return reply.type("text/html").send(html);
@@ -141,8 +159,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     "/bead/:id",
     async (req, reply) => {
       const id = req.params.id;
-      const content = await renderBeadPage(id);
-      const html = await withLayout(`Bead: ${id}`, content);
+      const html = await withLayout(`Bead: ${id}`, placeholder(`Bead: ${id}`));
       return reply.type("text/html").send(html);
     }
   );
@@ -162,9 +179,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).type("text/html").send(html);
       }
       const output = await getAgentOutput(sessionName, 20);
+      const sessionInfo = await getAgentSessionInfo(sessionName);
+      Object.assign(agent, sessionInfo);
+      const agentPath = `${agent.rig}/${agent.role === "polecat" ? "polecats" : agent.role === "crew" ? "crew" : agent.role}/${agent.name}`;
+      const workHistory = await getAgentWorkHistory(agentPath, agent.rig);
       const html = await withLayout(
         `Agent: ${agent.name}`,
-        renderAgentDetailPage(agent, output),
+        renderAgentDetailPage(agent, output, workHistory),
         "/agents"
       );
       return reply.type("text/html").send(html);
@@ -175,4 +196,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerMayorApi(app);
   await registerPipelineApi(app);
   await registerAgentsApi(app);
+  await registerProjectsApi(app);
 }

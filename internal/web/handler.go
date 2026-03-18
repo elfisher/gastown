@@ -23,6 +23,7 @@ var staticFiles embed.FS
 type ConvoyFetcher interface {
 	FetchConvoys() ([]ConvoyRow, error)
 	FetchMergeQueue() ([]MergeQueueRow, error)
+	FetchPipeline() ([]PipelineRow, error)
 	FetchWorkers() ([]WorkerRow, error)
 	FetchMail() ([]MailRow, error)
 	FetchRigs() ([]RigRow, error)
@@ -34,7 +35,9 @@ type ConvoyFetcher interface {
 	FetchHooks() ([]HookRow, error)
 	FetchMayor() (*MayorStatus, error)
 	FetchIssues() ([]IssueRow, error)
+	FetchScoreboard() (*ScoreboardData, error)
 	FetchActivity() ([]ActivityRow, error)
+	FetchDigest() (*DigestData, error)
 }
 
 // ConvoyHandler handles HTTP requests for the convoy dashboard.
@@ -72,6 +75,7 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var (
 		convoys     []ConvoyRow
 		mergeQueue  []MergeQueueRow
+		pipeline    []PipelineRow
 		workers     []WorkerRow
 		mail        []MailRow
 		rigs        []RigRow
@@ -84,11 +88,13 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mayor       *MayorStatus
 		issues      []IssueRow
 		activity    []ActivityRow
+		scoreboard  *ScoreboardData
+		digest      *DigestData
 		wg          sync.WaitGroup
 	)
 
 	// Run all fetches in parallel with error logging
-	wg.Add(14)
+	wg.Add(17)
 
 	go func() {
 		defer wg.Done()
@@ -104,6 +110,14 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mergeQueue, err = h.fetcher.FetchMergeQueue()
 		if err != nil {
 			log.Printf("dashboard: FetchMergeQueue failed: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		var err error
+		pipeline, err = h.fetcher.FetchPipeline()
+		if err != nil {
+			log.Printf("dashboard: FetchPipeline failed: %v", err)
 		}
 	}()
 	go func() {
@@ -202,6 +216,22 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Printf("dashboard: FetchActivity failed: %v", err)
 		}
 	}()
+	go func() {
+		defer wg.Done()
+		var err error
+		scoreboard, err = h.fetcher.FetchScoreboard()
+		if err != nil {
+			log.Printf("dashboard: FetchScoreboard failed: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		var err error
+		digest, err = h.fetcher.FetchDigest()
+		if err != nil {
+			log.Printf("dashboard: FetchDigest failed: %v", err)
+		}
+	}()
 
 	// Wait for fetches or timeout
 	done := make(chan struct{})
@@ -226,6 +256,7 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	data := ConvoyData{
 		Convoys:     convoys,
 		MergeQueue:  mergeQueue,
+		Pipeline:    pipeline,
 		Workers:     workers,
 		Mail:        mail,
 		Rigs:        rigs,
@@ -239,6 +270,8 @@ func (h *ConvoyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Issues:      enrichIssuesWithAssignees(issues, hooks),
 		Activity:    activity,
 		Summary:     summary,
+		Scoreboard:  scoreboard,
+		Digest:      digest,
 		Expand:      expandPanel,
 		CSRFToken:   h.csrfToken,
 	}

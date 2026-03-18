@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { exec } from "./exec.js";
+import { getSessionLines } from "./terminal.js";
 import type { MayorMessage } from "./schemas.js";
 
 const ACTION_PATTERNS = [
@@ -9,23 +10,6 @@ const ACTION_PATTERNS = [
   /\bspawn/i,
   /\bmerge/i,
   /\bnudge\b/i,
-];
-
-/** Lines to filter from tmux capture (noise / recursive dashboard content). */
-const NOISE_PATTERNS = [
-  /^\s*$/,
-  /^\s*[>%$#]\s*$/,
-  /hx-get=|hx-post=|hx-trigger=|hx-swap=/i,
-  /class="chat |class="alert /,
-  /chat-bubble|chat-start|chat-end/,
-  /whitespace-pre-wrap/,
-  /^\s*<\/?div/,
-  /^\s*<\/?form/,
-  /^\s*<\/?pre/,
-  /^\s*<input /,
-  /^\s*<button /,
-  /^\s*<span /,
-  /^\s*<time /,
 ];
 
 /** Server-side store for human-sent messages. */
@@ -43,10 +27,6 @@ function isActionMessage(text: string): boolean {
   return ACTION_PATTERNS.some((p) => p.test(text));
 }
 
-function isNoiseLine(line: string): boolean {
-  return NOISE_PATTERNS.some((p) => p.test(line));
-}
-
 function parseTimestamp(line: string): string | null {
   const m = line.match(
     /(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:\d{2}|Z)?)/
@@ -58,14 +38,7 @@ export async function getMayorMessages(): Promise<MayorMessage[]> {
   const messages: MayorMessage[] = [];
 
   try {
-    const result = await exec(
-      "tmux",
-      ["capture-pane", "-t", "hq-mayor", "-p", "-S", "-200"],
-      { timeoutMs: 5_000 }
-    );
-    const lines = result.stdout
-      .split("\n")
-      .filter((l) => l.trim() && !isNoiseLine(l));
+    const lines = await getSessionLines("hq-mayor", 200);
 
     let block: string[] = [];
     for (const line of lines) {

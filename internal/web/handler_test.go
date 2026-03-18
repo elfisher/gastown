@@ -20,6 +20,7 @@ var errFetchFailed = errors.New("fetch failed")
 type MockConvoyFetcher struct {
 	Convoys     []ConvoyRow
 	MergeQueue  []MergeQueueRow
+	Pipeline    []PipelineRow
 	Workers     []WorkerRow
 	Mail        []MailRow
 	Rigs        []RigRow
@@ -41,6 +42,10 @@ func (m *MockConvoyFetcher) FetchConvoys() ([]ConvoyRow, error) {
 
 func (m *MockConvoyFetcher) FetchMergeQueue() ([]MergeQueueRow, error) {
 	return m.MergeQueue, nil
+}
+
+func (m *MockConvoyFetcher) FetchPipeline() ([]PipelineRow, error) {
+	return m.Pipeline, nil
 }
 
 func (m *MockConvoyFetcher) FetchWorkers() ([]WorkerRow, error) {
@@ -87,8 +92,16 @@ func (m *MockConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 	return m.Issues, nil
 }
 
+func (m *MockConvoyFetcher) FetchScoreboard() (*ScoreboardData, error) {
+	return &ScoreboardData{}, nil
+}
+
 func (m *MockConvoyFetcher) FetchActivity() ([]ActivityRow, error) {
 	return m.Activity, nil
+}
+
+func (m *MockConvoyFetcher) FetchDigest() (*DigestData, error) {
+	return nil, nil
 }
 
 func TestConvoyHandler_RendersTemplate(t *testing.T) {
@@ -414,8 +427,8 @@ func TestConvoyHandler_PolecatWorkersRendering(t *testing.T) {
 	body := w.Body.String()
 
 	// Check polecat section header
-	if !strings.Contains(body, "Polecats") {
-		t.Error("Response should contain polecats section header")
+	if !strings.Contains(body, "Workers") {
+		t.Error("Response should contain workers section header")
 	}
 
 	// Check polecat names
@@ -647,8 +660,8 @@ func TestConvoyHandler_FullDashboard(t *testing.T) {
 	if !strings.Contains(body, "#789") {
 		t.Error("Response should contain PR data")
 	}
-	if !strings.Contains(body, "Polecats") {
-		t.Error("Response should contain polecats section")
+	if !strings.Contains(body, "Workers") {
+		t.Error("Response should contain workers section")
 	}
 	if !strings.Contains(body, "worker1") {
 		t.Error("Response should contain polecat data")
@@ -741,7 +754,7 @@ func TestE2E_Server_FullDashboard(t *testing.T) {
 		{"Merge queue section", "Merge Queue"},
 		{"PR number", "#101"},
 		{"PR repo", "roxas"},
-		{"Polecats section", "Polecats"},
+		{"Polecats section", "Workers"},
 		{"Polecat name", "furiosa"},
 		{"HTMX SSE trigger", `hx-trigger="sse:dashboard-update`},
 	}
@@ -1012,6 +1025,10 @@ func (m *MockConvoyFetcherWithErrors) FetchMergeQueue() ([]MergeQueueRow, error)
 	return nil, m.MergeQueueError
 }
 
+func (m *MockConvoyFetcherWithErrors) FetchPipeline() ([]PipelineRow, error) {
+	return nil, nil
+}
+
 func (m *MockConvoyFetcherWithErrors) FetchWorkers() ([]WorkerRow, error) {
 	return nil, m.WorkersError
 }
@@ -1056,7 +1073,15 @@ func (m *MockConvoyFetcherWithErrors) FetchIssues() ([]IssueRow, error) {
 	return nil, nil
 }
 
+func (m *MockConvoyFetcherWithErrors) FetchScoreboard() (*ScoreboardData, error) {
+	return nil, nil
+}
+
 func (m *MockConvoyFetcherWithErrors) FetchActivity() ([]ActivityRow, error) {
+	return nil, nil
+}
+
+func (m *MockConvoyFetcherWithErrors) FetchDigest() (*DigestData, error) {
 	return nil, nil
 }
 

@@ -1,8 +1,12 @@
-import { getBead, getBeadHistory } from "../data/beads.js";
+import { getBead } from "../data/beads.js";
 import { listConvoys } from "../data/convoys.js";
+import { getBeadBranchInfo, type BranchInfo } from "../data/git.js";
+import { getAgentOutput } from "../data/agents.js";
 import { escapeHtml, statusBadge, priorityLabel } from "./helpers.js";
-import { linkify } from "./linkify.js";
-import type { BeadDetail, BeadHistoryEntry } from "../data/schemas.js";
+import type { BeadDetail } from "../data/schemas.js";
+
+interface BeadHistoryEntry { timestamp: string; action: string; actor?: string; detail?: string; date?: string; committer?: string; status?: string; }
+async function getBeadHistory(_id: string): Promise<BeadHistoryEntry[]> { return []; }
 
 /** Extract rig name from bead ID prefix (e.g. "gt-abc" → "gastown" via prefix lookup) */
 function rigFromAssignee(assignee?: string): string | undefined {
@@ -10,6 +14,28 @@ function rigFromAssignee(assignee?: string): string | undefined {
   // assignee format: "gastown/polecats/furiosa" or "gastown/crew/dom"
   const parts = assignee.split("/");
   return parts[0];
+}
+
+/** Extract a metadata value from the key: value preamble in a description */
+function extractMeta(description: string, key: string): string | undefined {
+  for (const line of description.split("\n")) {
+    const m = new RegExp(`^${key}:\\s*(.+)`).exec(line.trim());
+    if (m) return m[1]!.trim();
+  }
+  return undefined;
+}
+
+/** Derive tmux session name from assignee path (e.g. "gastown/polecats/furiosa" → "gastown-furiosa") */
+function sessionFromAssignee(assignee?: string): string | undefined {
+  if (!assignee) return undefined;
+  const parts = assignee.split("/");
+  if (parts.length >= 3 && parts[1] === "polecats") {
+    return `${parts[0]}-${parts[2]}`;
+  }
+  if (parts.length >= 1) {
+    return `${parts[0]}-${parts[parts.length - 1]}`;
+  }
+  return undefined;
 }
 
 /** Parse description for checklist items (lines starting with - [ ] or - [x]) */
@@ -57,11 +83,11 @@ function renderTimeline(history: BeadHistoryEntry[]): string {
   }
   const items = history.map((e) => `
     <li>
-      <div class="timeline-start text-xs text-base-content/50">${escapeHtml(e.date)}</div>
+      <div class="timeline-start text-xs text-base-content/50">${escapeHtml(e.date ?? e.timestamp)}</div>
       <div class="timeline-middle"><span class="badge badge-xs badge-primary"></span></div>
       <div class="timeline-end timeline-box text-sm">
-        <span class="font-semibold">${escapeHtml(e.committer)}</span>
-        → ${statusBadge(e.status)}
+        <span class="font-semibold">${escapeHtml(e.committer ?? e.actor ?? "")}</span>
+        → ${statusBadge(e.status ?? e.action)}
       </div>
       <hr/>
     </li>`).join("");
@@ -79,7 +105,7 @@ function renderDescription(description: string): string {
   const descLines = clean.split("\n").filter((l) => !/^[-*]\s+\[[ xX]\]/.test(l.trim()));
   const descText = descLines.join("\n").trim();
   if (descText) {
-    sections.push(`<div class="whitespace-pre-wrap text-sm">${linkify(escapeHtml(descText))}</div>`);
+    sections.push(`<div class="whitespace-pre-wrap text-sm">${escapeHtml(descText)}</div>`);
   }
 
   // Render checklist as acceptance criteria
@@ -87,7 +113,7 @@ function renderDescription(description: string): string {
     const items = checklist.map((c) =>
       `<li><label class="flex items-center gap-2 cursor-default">
         <input type="checkbox" class="checkbox checkbox-sm" ${c.checked ? "checked" : ""} disabled />
-        <span class="text-sm">${linkify(escapeHtml(c.text))}</span>
+        <span class="text-sm">${escapeHtml(c.text)}</span>
       </label></li>`
     ).join("");
     sections.push(`
@@ -125,6 +151,99 @@ function renderDeps(bead: BeadDetail): string {
   return depRows(deps, "Depends On") + depRows(dependents, "Blocks");
 }
 
+function renderFilesChanged(info: BranchInfo): string {
+  if (info.files.length === 0 && info.commits.length === 0) {
+    return `<p class="text-base-content/50 text-sm">No changes found</p>`;
+  }
+
+  const totalAdd = info.files.reduce((s, f) => s + f.additions, 0);
+  const totalDel = info.files.reduce((s, f) => s + f.deletions, 0);
+
+  // Commit log
+  const commitRows = info.commits.map((c) =>
+    `<tr>
+      <td class="font-mono text-xs">${escapeHtml(c.hash)}</td>
+      <td class="text-sm">${escapeHtml(c.message)}</td>
+      <td class="text-xs text-base-content/50">${escapeHtml(c.date)}</td>
+    </tr>`
+  ).join("");
+
+  const commitTable = info.commits.length > 0 ? `
+    <div class="mb-4">
+      <p class="text-sm text-base-content/50 mb-2">${info.commits.length} commit${info.commits.length !== 1 ? "s" : ""} on <code class="text-xs">${escapeHtml(info.branch)}</code></p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm"><tbody>${commitRows}</tbody></table>
+      </div>
+    </div>` : "";
+
+  // File list with expandable diffs
+  const fileRows = info.files.map((f, i) => {
+    const diffId = `diff-${i}`;
+    const bar = renderDiffBar(f.additions, f.deletions);
+    const diffBlock = f.diff
+      ? `<div id="${diffId}" class="hidden mt-2">
+          <pre class="bg-base-200 rounded-lg p-3 text-xs overflow-x-auto max-h-96 whitespace-pre-wrap"><code>${colorDiff(escapeHtml(f.diff))}</code></pre>
+        </div>`
+      : "";
+    const toggle = f.diff
+      ? `onclick="document.getElementById('${diffId}').classList.toggle('hidden')" class="cursor-pointer hover:bg-base-200 rounded"`
+      : "";
+    return `
+      <div ${toggle}>
+        <div class="flex items-center gap-2 py-1 px-2">
+          ${f.diff ? `<span class="text-xs text-base-content/30">▶</span>` : ""}
+          <span class="font-mono text-sm flex-1">${escapeHtml(f.file)}</span>
+          <span class="text-success text-xs">+${f.additions}</span>
+          <span class="text-error text-xs">-${f.deletions}</span>
+          ${bar}
+        </div>
+        ${diffBlock}
+      </div>`;
+  }).join("");
+
+  return `
+    ${commitTable}
+    <div class="flex items-center gap-3 mb-2">
+      <span class="text-sm font-semibold">${info.files.length} file${info.files.length !== 1 ? "s" : ""} changed</span>
+      <span class="text-success text-xs">+${totalAdd}</span>
+      <span class="text-error text-xs">-${totalDel}</span>
+    </div>
+    <div class="divide-y divide-base-200">${fileRows}</div>`;
+}
+
+/** Tiny colored bar showing add/delete ratio */
+function renderDiffBar(add: number, del: number): string {
+  const total = add + del;
+  if (total === 0) return "";
+  const boxes = 5;
+  const addBoxes = Math.round((add / total) * boxes);
+  const delBoxes = boxes - addBoxes;
+  return `<span class="inline-flex gap-px">${"<span class=\"inline-block w-2 h-2 bg-success rounded-sm\"></span>".repeat(addBoxes)}${"<span class=\"inline-block w-2 h-2 bg-error rounded-sm\"></span>".repeat(delBoxes)}</span>`;
+}
+
+/** Add color spans to diff lines (already HTML-escaped) */
+function colorDiff(escaped: string): string {
+  return escaped.split("\n").map((line) => {
+    if (line.startsWith("+") && !line.startsWith("+++")) {
+      return `<span class="text-success">${line}</span>`;
+    }
+    if (line.startsWith("-") && !line.startsWith("---")) {
+      return `<span class="text-error">${line}</span>`;
+    }
+    if (line.startsWith("@@")) {
+      return `<span class="text-info">${line}</span>`;
+    }
+    return line;
+  }).join("\n");
+}
+
+function renderAgentOutputSection(output: string): string {
+  if (!output || output === "(session not available)") {
+    return `<p class="text-base-content/50 text-sm">No active session</p>`;
+  }
+  return `<pre class="bg-base-200 rounded-lg p-4 text-xs overflow-x-auto max-h-96 whitespace-pre-wrap"><code>${escapeHtml(output)}</code></pre>`;
+}
+
 export async function renderBeadPage(id: string): Promise<string> {
   let bead: BeadDetail;
   try {
@@ -153,6 +272,30 @@ export async function renderBeadPage(id: string): Promise<string> {
 
   const rigName = rigFromAssignee(bead.assignee);
 
+  // Fetch git branch info (files changed + diffs)
+  let branchInfo: BranchInfo | null = null;
+  if (rigName) {
+    const baseBranch = extractMeta(bead.description ?? "", "base_branch") ?? "main";
+    try {
+      branchInfo = await getBeadBranchInfo(rigName, id, baseBranch);
+    } catch {
+      // no git info
+    }
+  }
+
+  // Fetch real agent terminal output
+  let agentOutput = "";
+  if (bead.assignee) {
+    const session = sessionFromAssignee(bead.assignee);
+    if (session) {
+      try {
+        agentOutput = await getAgentOutput(session, 40);
+      } catch {
+        // no session
+      }
+    }
+  }
+
   return `
 ${renderBreadcrumbs(bead, rigName, convoyId)}
 
@@ -176,12 +319,15 @@ ${renderBreadcrumbs(bead, rigName, convoyId)}
 
     ${renderDeps(bead)}
 
+    <div>
+      <h2 class="text-lg font-bold mb-3">Files Changed</h2>
+      ${branchInfo ? renderFilesChanged(branchInfo) : `<p class="text-base-content/50 text-sm">No branch found for this bead</p>`}
+    </div>
+
     ${bead.assignee ? `
     <div>
       <h2 class="text-lg font-bold mb-3">Agent Output</h2>
-      <pre class="bg-base-200 rounded-lg p-4 text-xs overflow-x-auto max-h-96 whitespace-pre-wrap"><code>Agent: ${escapeHtml(bead.assignee)}
-Status: ${escapeHtml(bead.status)}
-Updated: ${escapeHtml(bead.updated_at)}</code></pre>
+      ${renderAgentOutputSection(agentOutput)}
     </div>` : ""}
   </div>
 

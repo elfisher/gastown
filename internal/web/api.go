@@ -995,6 +995,7 @@ type IssueShowResponse struct {
 	Updated     string   `json:"updated,omitempty"`
 	DependsOn   []string `json:"depends_on,omitempty"`
 	Blocks      []string `json:"blocks,omitempty"`
+	Origin      string   `json:"origin,omitempty"` // "agent" or "human"
 	RawOutput   string   `json:"raw_output"`
 }
 
@@ -1321,6 +1322,7 @@ func parseIssueShowJSON(output string) (IssueShowResponse, bool) {
 		Type        string   `json:"issue_type"`
 		Owner       string   `json:"owner"`
 		CreatedAt   string   `json:"created_at"`
+		CreatedBy   string   `json:"created_by"`
 		UpdatedAt   string   `json:"updated_at"`
 		DependsOn   []string `json:"depends_on,omitempty"`
 		Blocks      []string `json:"blocks,omitempty"`
@@ -1347,6 +1349,7 @@ func parseIssueShowJSON(output string) (IssueShowResponse, bool) {
 		Updated:     item.UpdatedAt,
 		DependsOn:   item.DependsOn,
 		Blocks:      item.Blocks,
+		Origin:      classifyIssueOrigin(item.CreatedBy),
 		RawOutput:   output,
 	}, true
 }

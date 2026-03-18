@@ -12,6 +12,33 @@ const ACTION_PATTERNS = [
   /\bnudge\b/i,
 ];
 
+/** Lines that are noise from recursive tmux capture or CLI leakage. */
+const MAYOR_NOISE = [
+  /^\s*$/,
+  // Recursive dashboard HTML fragments
+  /hx-get=|hx-post=|hx-trigger=|hx-swap=/i,
+  /class="chat |class="alert /,
+  /chat-bubble|chat-start|chat-end/,
+  /whitespace-pre-wrap/,
+  /^\s*<\/?div/,
+  /^\s*<\/?form/,
+  /^\s*<\/?pre/,
+  /^\s*<input /,
+  /^\s*<button /,
+  /^\s*<span /,
+  /^\s*<time /,
+  // CLI noise
+  /^\s*\$\s+(curl|gt\s+nudge|tmux|docker)\b/,
+  /^\s*curl\s+(-[sS]|--silent|http)/,
+  // ANSI escapes
+  /\x1b\[[0-9;]*[a-zA-Z]/,
+  // tmux control
+  /^\s*%begin\b|^\s*%end\b|^\s*%output\b/,
+  // HTTP fragments
+  /^\s*\{?"ok"\s*:\s*(true|false)/,
+  /^\s*HTTP\/[12]/,
+];
+
 /** Server-side store for human-sent messages. */
 const sentMessages: MayorMessage[] = [];
 
@@ -21,6 +48,10 @@ export function addSentMessage(text: string): void {
     text,
     timestamp: new Date().toISOString(),
   });
+}
+
+function isMayorNoise(line: string): boolean {
+  return MAYOR_NOISE.some((p) => p.test(line));
 }
 
 function isActionMessage(text: string): boolean {
@@ -53,7 +84,7 @@ export async function getMayorMessages(): Promise<MayorMessage[]> {
           });
           block = [];
         }
-      } else {
+      } else if (!isMayorNoise(line)) {
         block.push(line);
       }
     }

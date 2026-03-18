@@ -72,13 +72,17 @@ export function renderMayorPage(messages: MayorMessage[]): string {
     <form class="mt-4 flex gap-2"
           hx-post="/api/mayor/nudge"
           hx-swap="none"
-          hx-on::after-request="this.reset(); htmx.trigger(document.body, 'refresh-messages')">
+          hx-on::after-request="if(event.detail.successful){this.reset();htmx.trigger(document.body,'refresh-messages')}"
+          hx-indicator="#send-btn">
       <input type="text" name="message"
              placeholder="Send a message to the Mayor..."
              class="input input-bordered flex-1"
              required
              autocomplete="off" />
-      <button type="submit" class="btn btn-primary">Send</button>
+      <button id="send-btn" type="submit" class="btn btn-primary">
+        <span class="htmx-indicator loading loading-spinner loading-xs"></span>
+        Send
+      </button>
     </form>
 
     <script>

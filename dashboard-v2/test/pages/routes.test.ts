@@ -8,6 +8,8 @@ describe("routes", () => {
     "/agents",
     "/mayor",
     "/tour",
+    "/overview",
+    "/projects",
     "/rig/gastown",
     "/convoy/test-123",
     "/bead/gt-abc12",

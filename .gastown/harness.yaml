@@ -1,0 +1,8 @@
+# Verification harness for gastown.
+# tier0: fast gates (must pass before tier1 runs).
+# tier1: extended checks (typechecks, slow tests, etc.).
+tier0:
+  - go build ./...
+  - go test ./...
+tier1:
+  - cd dashboard-v2 && npx tsc --noEmit

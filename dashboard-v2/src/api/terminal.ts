@@ -1,14 +1,17 @@
 /**
  * Terminal WebSocket + raw-capture API.
  *
- * - GET /ws/terminal/:session  → WebSocket ↔ tmux via node-pty (interactive)
+ * - GET /ws/terminal/:session  → WebSocket ↔ tmux via control mode (interactive)
  * - GET /api/terminal/:session/raw → raw capture-pane output (read-only)
+ *
+ * Uses tmux control mode (-C) instead of node-pty to avoid macOS posix_spawn
+ * restrictions. Control mode gives structured %output events over stdin/stdout.
  */
 
 import type { FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
+import { spawn, type ChildProcess } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
-import * as pty from "node-pty";
 import { exec } from "../data/exec.js";
 
 /** Sanitise a tmux session name to prevent injection. */
@@ -27,20 +30,37 @@ async function sessionExists(session: string): Promise<boolean> {
 }
 
 /**
+ * Parse tmux control mode %output lines.
+ * Format: %output %<pane-id> <escaped-data>
+ * The data uses C-style escapes: \033 for ESC, \015 for CR, etc.
+ */
+function parseControlOutput(line: string): string | null {
+  const match = line.match(/^%output %\S+ (.*)$/);
+  if (!match?.[1]) return null;
+  return match[1]
+    .replace(/\\033/g, "\x1b")
+    .replace(/\\015/g, "\r")
+    .replace(/\\012/g, "\n")
+    .replace(/\\007/g, "\x07")
+    .replace(/\\010/g, "\b")
+    .replace(/\\011/g, "\t")
+    .replace(/\\\\/g, "\\");
+}
+
+/**
  * Register the interactive WebSocket terminal endpoint.
  *
- * Bridges browser ↔ tmux session via node-pty. On disconnect the pty is
- * killed (which detaches from tmux — it does NOT kill the tmux session).
+ * Uses tmux control mode (-C) which communicates over stdin/stdout
+ * without needing a pty. Keystrokes are sent via tmux send-keys.
  */
 export async function registerTerminalWs(app: FastifyInstance): Promise<void> {
   const server = app.server;
-
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (req: IncomingMessage, socket, head) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
     const match = url.pathname.match(/^\/ws\/terminal\/([^/]+)$/);
-    if (!match) return; // not ours — let other upgrade handlers (if any) deal with it
+    if (!match) return;
 
     const session = sanitizeSession(match[1]!);
     if (!session) {
@@ -60,65 +80,90 @@ export async function registerTerminalWs(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    let ptyProcess: pty.IPty;
+    let tmuxProc: ChildProcess;
     try {
-      ptyProcess = pty.spawn("tmux", ["attach-session", "-t", session], {
-        name: "xterm-256color",
-        cols: 120,
-        rows: 40,
-        env: { ...process.env, TERM: "xterm-256color" } as Record<string, string>,
+      tmuxProc = spawn("tmux", ["-C", "attach-session", "-t", session], {
+        stdio: ["pipe", "pipe", "pipe"],
       });
     } catch (err) {
       ws.close(4005, `Failed to attach: ${err}`);
       return;
     }
 
-    // pty → browser
-    ptyProcess.onData((data: string) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data);
+    let buffer = "";
+
+    // tmux control mode stdout → parse %output → send to browser
+    tmuxProc.stdout?.on("data", (chunk: Buffer) => {
+      buffer += chunk.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const data = parseControlOutput(line);
+        if (data && ws.readyState === WebSocket.OPEN) {
+          ws.send(data);
+        }
       }
     });
 
-    ptyProcess.onExit(() => {
+    tmuxProc.on("exit", () => {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.close(1000, "pty exited");
+        ws.close(1000, "tmux exited");
       }
     });
 
-    // browser → pty
+    // browser → tmux: send keystrokes via send-keys
     ws.on("message", (msg) => {
       const data = typeof msg === "string" ? msg : msg.toString("utf-8");
 
-      // Handle resize messages: JSON { type: "resize", cols, rows }
+      // Handle resize messages
       try {
         const parsed = JSON.parse(data) as { type?: string; cols?: number; rows?: number };
         if (parsed.type === "resize" && parsed.cols && parsed.rows) {
-          ptyProcess.resize(parsed.cols, parsed.rows);
+          tmuxProc.stdin?.write(`resize-window -t ${session} -x ${parsed.cols} -y ${parsed.rows}\n`);
           return;
         }
       } catch {
         // Not JSON — treat as keystroke data
       }
 
-      ptyProcess.write(data);
+      // Escape special characters for send-keys
+      // tmux control mode accepts commands on stdin
+      const escaped = data
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/;/g, "\\;");
+      tmuxProc.stdin?.write(`send-keys -t ${session} -l "${escaped}"\n`);
     });
 
     ws.on("close", () => {
-      ptyProcess.kill();
+      tmuxProc.stdin?.write("detach\n");
+      tmuxProc.kill();
     });
 
     ws.on("error", () => {
-      ptyProcess.kill();
+      tmuxProc.stdin?.write("detach\n");
+      tmuxProc.kill();
     });
+
+    // Send initial capture so the terminal isn't blank
+    try {
+      const initial = await exec(
+        "tmux",
+        ["capture-pane", "-t", session, "-p", "-e"],
+        { timeoutMs: 3_000 },
+      );
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(initial.stdout);
+      }
+    } catch {
+      // Non-fatal — live output will follow
+    }
   });
 }
 
 /**
  * Register the read-only raw terminal capture endpoint.
- *
- * Returns raw `tmux capture-pane` output with ANSI escape sequences preserved
- * so xterm.js can render them natively.
  */
 export async function registerTerminalApi(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { session: string } }>(

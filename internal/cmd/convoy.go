@@ -714,9 +714,12 @@ func runConvoyCreate(cmd *cobra.Command, args []string) error {
 	// Add 'tracks' relations for each tracked issue
 	trackedCount := 0
 	for _, issueID := range trackedIssues {
+		// Wrap cross-rig bead IDs with external:<rig>: prefix so bd dep add
+		// stores them in a form that survives cross-database reads (GH #2624).
+		depTarget := wrapCrossRigDep(townBeads, issueID)
 		// Use --type=tracks for non-blocking tracking relation
 		var depStderr bytes.Buffer
-		if err := BdCmd("dep", "add", convoyID, issueID, "--type=tracks").
+		if err := BdCmd("dep", "add", convoyID, depTarget, "--type=tracks").
 			WithAutoCommit().
 			Dir(townBeads).
 			StripBeadsDir().
@@ -833,8 +836,9 @@ func runConvoyAdd(cmd *cobra.Command, args []string) error {
 	// Add 'tracks' relations for each issue
 	addedCount := 0
 	for _, issueID := range issuesToAdd {
+		depTarget := wrapCrossRigDep(townBeads, issueID)
 		var depStderr bytes.Buffer
-		if err := BdCmd("dep", "add", convoyID, issueID, "--type=tracks").
+		if err := BdCmd("dep", "add", convoyID, depTarget, "--type=tracks").
 			Dir(townBeads).
 			WithAutoCommit().
 			StripBeadsDir().
@@ -1635,6 +1639,22 @@ func isReadyIssue(t trackedIssueInfo, scheduledSet map[string]bool) bool {
 // isSlingableBead reports whether a bead can be dispatched via gt sling.
 // Town-level beads (hq- prefix with path=".") and beads with unknown
 // prefixes are not slingable — they're handled by the deacon/mayor.
+// wrapCrossRigDep returns the bead ID wrapped as external:<rig>:<id> if the
+// bead lives in a different database than HQ. Town-level beads (hq-*) are
+// returned as-is. This ensures bd dep add stores cross-database deps in a
+// form that bd dep list / bd show can resolve (GH #2624, #2832).
+func wrapCrossRigDep(townRoot, beadID string) string {
+	prefix := beads.ExtractPrefix(beadID)
+	if prefix == "" || prefix == "hq-" || strings.HasPrefix(beadID, "hq-cv-") {
+		return beadID // same database
+	}
+	rigName := beads.GetRigNameForPrefix(townRoot, prefix)
+	if rigName == "" {
+		return beadID // can't resolve, pass through
+	}
+	return fmt.Sprintf("external:%s:%s", rigName, beadID)
+}
+
 func isSlingableBead(townRoot, beadID string) bool {
 	prefix := beads.ExtractPrefix(beadID)
 	if prefix == "" {

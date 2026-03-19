@@ -58,7 +58,7 @@ export async function renderRigPage(name: string): Promise<string> {
           <h3 class="card-title text-sm">${escapeHtml(c.name)}</h3>
           <div class="flex gap-2 text-xs">
             ${statusBadge(c.status)}
-            <span class="badge badge-ghost badge-xs">${c.issue_count ?? c.issues?.length ?? 0} beads</span>
+            <span class="badge badge-ghost badge-xs">${c.total ?? c.tracked?.length ?? c.issues?.length ?? 0} beads</span>
           </div>
         </div>
       </a>`).join("")

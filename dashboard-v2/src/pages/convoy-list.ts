@@ -13,7 +13,7 @@ export function renderConvoyListPage(convoys: Convoy[], showingAll = false): str
         <td><a href="/convoy/${encodeURIComponent(c.id)}" class="link link-hover font-mono text-xs">${escapeHtml(c.id)}</a></td>
         <td>${escapeHtml(c.name)}</td>
         <td>${statusBadge(c.status)}</td>
-        <td>${c.issue_count ?? c.issues?.length ?? 0}</td>
+        <td>${c.total ?? c.tracked?.length ?? c.issues?.length ?? 0}</td>
         <td class="text-xs text-base-content/50">${escapeHtml(c.created_at)}</td>
       </tr>`
     )

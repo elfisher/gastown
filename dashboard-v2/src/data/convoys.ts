@@ -25,7 +25,7 @@ export async function getConvoy(id: string): Promise<Convoy> {
 export async function getConvoyBeads(convoyId: string): Promise<string[]> {
   try {
     const convoy = await getConvoy(convoyId);
-    return convoy.issues ?? [];
+    return convoy.tracked?.map((t) => t.id) ?? convoy.issues ?? [];
   } catch {
     return [];
   }

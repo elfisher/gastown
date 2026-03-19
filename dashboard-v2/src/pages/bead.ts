@@ -256,7 +256,7 @@ export async function renderBeadPage(id: string): Promise<string> {
   let convoyId: string | undefined;
   try {
     const convoys = await listConvoys();
-    const match = convoys.find((c) => c.issues?.includes(id));
+    const match = convoys.find((c) => c.tracked?.some((t) => t.id === id) ?? c.issues?.includes(id));
     convoyId = match?.id;
   } catch {
     // no convoy info

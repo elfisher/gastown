@@ -23,7 +23,7 @@ export async function renderConvoyPage(id: string): Promise<string> {
     return `<div class="prose"><h1>Convoy Not Found</h1><p>No convoy with ID "${escapeHtml(id)}".</p></div>`;
   }
 
-  const issueIds = convoy.issues ?? [];
+  const issueIds = convoy.tracked?.map((t) => t.id) ?? convoy.issues ?? [];
   // Fetch all beads to find convoy members and their deps
   let allBeads: Bead[] = [];
   try {

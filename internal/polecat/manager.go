@@ -921,7 +921,7 @@ func (m *Manager) AddWithOptions(name string, opts AddOptions) (_ *Polecat, retE
 	worktreeCreated = true
 
 	// NOTE: No per-directory CLAUDE.md or AGENTS.md is created here.
-	// Only ~/gt/CLAUDE.md (town-root identity anchor) exists on disk.
+	// Only ~/gt/GT.md or ~/gt/CLAUDE.md (town-root identity anchor) exists on disk.
 	// Full context is injected ephemerally via SessionStart hook (gt prime).
 
 	// Set up shared beads: polecat uses rig's .beads via redirect file.
@@ -1436,7 +1436,7 @@ func (m *Manager) RepairWorktreeWithOptions(name string, force bool, opts AddOpt
 	}
 
 	// NOTE: No per-directory CLAUDE.md or AGENTS.md is created here.
-	// Only ~/gt/CLAUDE.md (town-root identity anchor) exists on disk.
+	// Only ~/gt/GT.md or ~/gt/CLAUDE.md (town-root identity anchor) exists on disk.
 	// Full context is injected ephemerally via SessionStart hook (gt prime).
 
 	// Set up shared beads — fatal during repair too, same reason as spawn.

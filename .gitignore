@@ -50,6 +50,8 @@ state.json
 
 # Clone-specific CLAUDE.md (regenerated locally per clone)
 CLAUDE.md
+# Clone-specific GT.md (regenerated locally per clone by gt upgrade)
+GT.md
 # But keep the embedded template for gt doctor version checks
 !internal/templates/townroot/claude.md
 

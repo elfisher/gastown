@@ -60,19 +60,20 @@ func (c *PrimingCheck) Run(ctx *CheckContext) *CheckResult {
 		details = append(details, "gt binary not found in PATH")
 	}
 
-	// Check 1.5: Town root CLAUDE.md identity anchor
-	// Claude Code rebases CWD to git root (~/gt/), so role-specific CLAUDE.md
-	// in subdirectories (mayor/, deacon/) won't be loaded. A generic CLAUDE.md
-	// at the town root prevents identity drift after compaction.
+	// Check 1.5: Town root identity anchor (GT.md or CLAUDE.md)
+	// Agents need an identity anchor at the town root to prevent identity drift
+	// after compaction. GT.md is the agent-agnostic version; CLAUDE.md is the
+	// legacy Claude Code version. Either satisfies the check.
+	townRootGT := filepath.Join(ctx.TownRoot, "GT.md")
 	townRootClaude := filepath.Join(ctx.TownRoot, "CLAUDE.md")
-	if !fileExists(townRootClaude) {
+	if !fileExists(townRootGT) && !fileExists(townRootClaude) {
 		c.issues = append(c.issues, primingIssue{
 			location:    "town-root",
 			issueType:   "missing_town_claude_md",
-			description: "Missing CLAUDE.md at town root (identity anchor for Mayor/Deacon)",
+			description: "Missing GT.md at town root (identity anchor — run gt upgrade)",
 			fixable:     true,
 		})
-		details = append(details, "town-root: Missing CLAUDE.md identity anchor")
+		details = append(details, "town-root: Missing GT.md identity anchor (run gt upgrade)")
 	}
 
 	// Check 2: Mayor priming (town-level)

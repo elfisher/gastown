@@ -87,11 +87,59 @@ export async function renderRigPage(name: string): Promise<string> {
 ${breadcrumbs([{ label: "Gas Town", href: "/" }, { label: rig.name }])}
 
 <div class="mb-6">
-  <h1 class="text-2xl font-bold">Rig: ${escapeHtml(rig.name)}</h1>
+  <div class="flex items-center gap-3">
+    <h1 class="text-2xl font-bold">Rig: ${escapeHtml(rig.name)}</h1>
+    <button class="btn btn-primary btn-sm" onclick="document.getElementById('plan-modal').showModal()">📋 Plan</button>
+  </div>
   <div class="flex flex-wrap items-center gap-2 mt-1">
     ${repoLink} ${branchBadge}
   </div>
 </div>
+
+<dialog id="plan-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold mb-4">Plan work for ${escapeHtml(rig.name)}</h3>
+    <form id="plan-form">
+      <div class="form-control">
+        <label class="label"><span class="label-text">What do you want to build?</span></label>
+        <textarea id="plan-goal" class="textarea textarea-bordered h-24" placeholder="Describe your goal..." required></textarea>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn" onclick="document.getElementById('plan-modal').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="plan-submit">Send to Mayor</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+<script>
+document.getElementById('plan-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('plan-submit');
+  const goal = document.getElementById('plan-goal').value.trim();
+  if (!goal) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Sending…';
+  try {
+    const res = await fetch('/api/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rig: ${JSON.stringify(rig.name)}, goal }),
+    });
+    if (res.ok) {
+      window.location.href = '/mayor';
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || 'Failed to send plan');
+    }
+  } catch (err) {
+    alert('Network error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send to Mayor';
+  }
+});
+</script>
 
 <div class="stats shadow mb-6">
   <div class="stat">

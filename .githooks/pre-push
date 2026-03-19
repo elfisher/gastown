@@ -21,8 +21,16 @@ if [[ -z "$default_branch" ]]; then
   fi
 fi
 
+# Detect the rig's working branch from config.json (base_branch field).
+# This is the branch polecats branch from and the refinery merges to.
+working_branch=""
+if [[ -f "config.json" ]]; then
+  working_branch=$(grep -o '"base_branch"[[:space:]]*:[[:space:]]*"[^"]*"' config.json 2>/dev/null | sed 's/.*"base_branch"[[:space:]]*:[[:space:]]*"//' | sed 's/"//')
+fi
+
 # Allowed patterns:
 #   <default_branch>, beads-sync  - Direct work branches
+#   <working_branch>              - Fork workflow working branch (from config.json base_branch)
 #   polecat/*                     - Polecat working branches (Refinery merges these)
 #   integration/*                 - Integration branches (created by gt mq integration)
 
@@ -39,6 +47,10 @@ while read local_ref local_sha remote_ref remote_sha; do
       # Allowed branches
       ;;
     *)
+      # Working branch from config.json base_branch — allowed
+      if [[ -n "$working_branch" && "$branch" == "$working_branch" ]]; then
+        continue
+      fi
       # Allow feature branches when contributing to upstream (fork workflow).
       # If an 'upstream' remote exists, this is a contribution setup where
       # feature branches are needed for PRs. See: #848

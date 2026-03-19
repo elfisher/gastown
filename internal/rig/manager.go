@@ -90,6 +90,7 @@ type RigConfig struct {
 	UpstreamURL   string       `json:"upstream_url,omitempty"`   // optional upstream URL (for fork workflows)
 	LocalRepo     string       `json:"local_repo,omitempty"`     // optional local reference repo
 	DefaultBranch string       `json:"default_branch,omitempty"` // main, master, etc.
+	BaseBranch    string       `json:"base_branch,omitempty"`    // working branch for fork workflows (falls back to default_branch)
 	CreatedAt     time.Time    `json:"created_at"`               // when rig was created
 	Beads         *BeadsConfig `json:"beads,omitempty"`
 
@@ -98,6 +99,15 @@ type RigConfig struct {
 	// PolecatNames optionally specifies fixed names (overrides theme-based naming).
 	PolecatPoolSize int      `json:"polecat_pool_size,omitempty"`
 	PolecatNames    []string `json:"polecat_names,omitempty"`
+
+	// HarnessDefaults provides default verification commands per tier.
+	HarnessDefaults *HarnessDefaults `json:"harness_defaults,omitempty"`
+}
+
+// HarnessDefaults holds default verification command lists keyed by tier.
+type HarnessDefaults struct {
+	Tier0 []string `json:"tier0,omitempty"` // fast gate commands (build, typecheck)
+	Tier1 []string `json:"tier1,omitempty"` // full gate commands (test, lint)
 }
 
 // BeadsConfig represents beads configuration for the rig.

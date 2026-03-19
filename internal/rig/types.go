@@ -96,3 +96,22 @@ func (r *Rig) DefaultBranch() string {
 	}
 	return cfg.DefaultBranch
 }
+
+// WorkingBranch returns the branch that polecats should branch from and
+// the refinery should merge into. Returns base_branch if set, otherwise
+// falls back to DefaultBranch. For fork workflows, base_branch should be
+// set to the feature branch (e.g., "dashboard-v2") so work doesn't land
+// on main.
+func (r *Rig) WorkingBranch() string {
+	cfg, err := LoadRigConfig(r.Path)
+	if err != nil {
+		return r.DefaultBranch()
+	}
+	if cfg.BaseBranch != "" {
+		return cfg.BaseBranch
+	}
+	if cfg.DefaultBranch != "" {
+		return cfg.DefaultBranch
+	}
+	return "main"
+}

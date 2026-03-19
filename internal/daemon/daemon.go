@@ -99,6 +99,17 @@ type Daemon struct {
 	// lastMaintenanceRun tracks when scheduled maintenance last ran.
 	// Only accessed from heartbeat loop goroutine - no sync needed.
 	lastMaintenanceRun time.Time
+
+	// postWakeStalled tracks polecats nudged after sleep/wake detection.
+	// Maps session name → time nudged. If still stalled on next heartbeat, session is killed.
+	// Only accessed from heartbeat loop goroutine - no sync needed.
+	postWakeStalled map[string]time.Time
+
+	// paneSnapshots tracks the last captured pane content per session for
+	// staleness detection. If pane content is unchanged across two heartbeats
+	// and the polecat has work on hook, the session is considered stale.
+	// Only accessed from heartbeat loop goroutine - no sync needed.
+	paneSnapshots map[string]string
 }
 
 // sessionDeath records a detected session death for mass death analysis.
@@ -261,18 +272,20 @@ func New(config *Config) (*Daemon, error) {
 	}
 
 	return &Daemon{
-		config:         config,
-		patrolConfig:   patrolConfig,
-		tmux:           tmux.NewTmux(),
-		logger:         logger,
-		ctx:            ctx,
-		cancel:         cancel,
-		doltServer:     doltServer,
-		gtPath:         gtPath,
-		bdPath:         bdPath,
-		restartTracker: restartTracker,
-		otelProvider:   otelProvider,
-		metrics:        dm,
+		config:          config,
+		patrolConfig:    patrolConfig,
+		tmux:            tmux.NewTmux(),
+		logger:          logger,
+		ctx:             ctx,
+		cancel:          cancel,
+		doltServer:      doltServer,
+		gtPath:          gtPath,
+		bdPath:          bdPath,
+		restartTracker:  restartTracker,
+		otelProvider:    otelProvider,
+		metrics:         dm,
+		postWakeStalled: make(map[string]time.Time),
+		paneSnapshots:   make(map[string]string),
 	}, nil
 }
 
@@ -732,6 +745,11 @@ func (d *Daemon) heartbeat(state *State) {
 	// Kill sessions that have been idle longer than the configured threshold.
 	d.reapIdlePolecats()
 
+	// 12c. Auto-compact system agent sessions to prevent context overflow.
+	// Checks context usage percentage from agent prompt and sends /compact
+	// when threshold is exceeded. Only applies to agents with CompactCommand set.
+	d.compactSystemAgents()
+
 	// 13. Clean up orphaned claude subagent processes (memory leak prevention)
 	// These are Task tool subagents that didn't clean up after completion.
 	// This is a safety net - Deacon patrol also does this more frequently.
@@ -742,6 +760,11 @@ func (d *Daemon) heartbeat(state *State) {
 	// branches via git fetch. After merge, remote branches are deleted but local
 	// branches persist indefinitely. This cleans them up periodically.
 	d.pruneStaleBranches()
+
+	// 13b. Post-merge consistency: push locally-merged-but-not-pushed branches.
+	// If the refinery session dies between git merge and git push, the local
+	// branch has the merge but the remote doesn't. This catches that case.
+	d.pushUnpushedMerges()
 
 	// 14. Dispatch scheduled work (capacity-controlled polecat dispatch).
 	// Shells out to `gt scheduler run` to avoid circular import between daemon and cmd.
@@ -1947,7 +1970,9 @@ func (d *Daemon) checkPolecatHealth(rigName, polecatName string) {
 	}
 
 	if sessionAlive {
-		// Session is alive - nothing to do
+		// Session is alive — but it might be sick. Check pane content for
+		// known failure patterns before declaring it healthy.
+		d.checkPolecatSessionSickness(rigName, polecatName, sessionName)
 		return
 	}
 
@@ -2040,6 +2065,91 @@ func (d *Daemon) checkPolecatHealth(rigName, polecatName string) {
 
 	// Notify witness — stuck-agent-dog plugin handles context-aware restart
 	d.notifyWitnessOfCrashedPolecat(rigName, polecatName, info.HookBead)
+
+	// Auto-respawn: re-sling the hooked bead to a fresh polecat.
+	// This is the direct recovery path — don't rely solely on the witness
+	// being alive and responsive (it may also be dead after a reboot).
+	d.logger.Printf("Auto-respawning: re-slinging %s to %s", info.HookBead, rigName)
+	slingCmd := exec.Command(d.gtPath, "sling", info.HookBead, rigName, "--force")
+	slingCmd.Dir = d.config.TownRoot
+	slingCmd.Env = append(os.Environ(), "BD_ACTOR=daemon")
+	if output, err := slingCmd.CombinedOutput(); err != nil {
+		d.logger.Printf("Warning: auto-respawn failed for %s: %s: %v", info.HookBead, strings.TrimSpace(string(output)), err)
+	}
+}
+
+// checkPolecatSessionSickness inspects the pane content of an alive session
+// for known failure patterns. The session exists but the agent inside may be
+// dead or stuck.
+//
+// Tier 1: Specific pattern matches (instant, targeted action)
+//   - "Select model" → send Enter to dismiss model selection UI
+//   - "ValidationException" → kill + notify witness for re-sling
+//
+// Tier 2: Generic staleness (slow, fallback)
+//   - Pane unchanged across two heartbeats + work on hook → nudge, then kill
+//
+// Working agents (⠋ Thinking...) are never flagged.
+func (d *Daemon) checkPolecatSessionSickness(rigName, polecatName, sessionName string) {
+	// Only check polecats with work on hook — idle polecats are allowed to sit.
+	prefix := beads.GetPrefixForRig(d.config.TownRoot, rigName)
+	agentBeadID := beads.PolecatBeadIDWithPrefix(prefix, rigName, polecatName)
+	info, err := d.getAgentBeadInfo(agentBeadID)
+	if err != nil || info.HookBead == "" {
+		return
+	}
+
+	// Capture pane content
+	paneContent, err := d.tmux.CapturePane(sessionName, 30)
+	if err != nil {
+		return
+	}
+
+	// Guard: if agent is actively working, don't flag anything.
+	if strings.Contains(paneContent, "⠋") || strings.Contains(paneContent, "Thinking") {
+		// Clear any stale snapshot — agent is alive and working
+		delete(d.paneSnapshots, sessionName)
+		return
+	}
+
+	// Tier 1: Specific pattern — model selection prompt
+	if strings.Contains(paneContent, "Select model") {
+		d.logger.Printf("MODEL_PROMPT_DETECTED: polecat %s/%s stuck on model selection, sending Enter", rigName, polecatName)
+		_ = d.tmux.SendKeysRaw(sessionName, "Enter")
+		return
+	}
+
+	// Tier 1: Specific pattern — waiting for retirement (boot race condition)
+	// Polecat finished work and is waiting for the refinery to process its MR.
+	// If the witness is sleeping (booted after polecat finished), nobody will
+	// retire the polecat. Nudge the witness directly via tmux send-keys.
+	if strings.Contains(paneContent, "Waiting for retirement") {
+		witnessSession := session.WitnessSessionName(session.PrefixFor(rigName))
+		d.logger.Printf("RETIREMENT_LIMBO: polecat %s/%s waiting for retirement, nudging witness %s", rigName, polecatName, witnessSession)
+		_ = d.tmux.SendKeys(witnessSession, "Check polecat "+polecatName+" — it's waiting for retirement and may have a pending MR.")
+		return
+	}
+
+	// Tier 1: Specific pattern — API validation error
+	if strings.Contains(paneContent, "ValidationException") || strings.Contains(paneContent, "Improperly formed request") {
+		d.logger.Printf("SICK_SESSION: polecat %s/%s has ValidationException in pane, killing session", rigName, polecatName)
+		_ = d.tmux.KillSession(sessionName)
+		d.notifyWitnessOfCrashedPolecat(rigName, polecatName, info.HookBead)
+		delete(d.paneSnapshots, sessionName)
+		return
+	}
+
+	// Tier 2: Generic staleness — pane unchanged across heartbeats
+	if prev, ok := d.paneSnapshots[sessionName]; ok && prev == paneContent {
+		d.logger.Printf("STALE_SESSION: polecat %s/%s pane unchanged across heartbeats (hook=%s)", rigName, polecatName, info.HookBead)
+		// Nudge the agent — if still stale on next heartbeat, the Witness
+		// or GUPP violation check will escalate.
+		_ = d.tmux.SendKeysRaw(sessionName, "")
+		return
+	}
+
+	// Record current pane for next heartbeat comparison
+	d.paneSnapshots[sessionName] = paneContent
 }
 
 // recordSessionDeath records a session death and checks for mass death pattern.
@@ -2147,6 +2257,37 @@ func (d *Daemon) reapIdlePolecats() {
 	rigs := d.getKnownRigs()
 	for _, rigName := range rigs {
 		d.reapRigIdlePolecats(rigName, timeout)
+	}
+}
+
+// compactSystemAgents checks context usage for long-running system agent sessions
+// (Mayor, Deacon, Witnesses, Refineries) and sends the agent's compact command
+// when usage exceeds the configured threshold. Prevents context overflow crashes.
+func (d *Daemon) compactSystemAgents() {
+	// Collect all system agent sessions
+	sessions, err := d.tmux.ListSessions()
+	if err != nil {
+		return
+	}
+
+	for _, sess := range sessions {
+		// Determine which agent is running in this session
+		agentName, _ := d.tmux.GetEnvironment(sess, "GT_AGENT")
+		if agentName == "" {
+			continue
+		}
+
+		preset := config.GetAgentPresetByName(agentName)
+		if preset == nil || preset.CompactCommand == "" || preset.CompactThreshold <= 0 {
+			continue
+		}
+
+		compacted, err := d.tmux.CompactIfNeeded(sess, preset)
+		if err != nil {
+			d.logger.Printf("Warning: compact check failed for %s: %v", sess, err)
+		} else if compacted {
+			d.logger.Printf("Compacted session %s (agent=%s, threshold=%d%%)", sess, agentName, preset.CompactThreshold)
+		}
 	}
 }
 
@@ -2277,6 +2418,55 @@ func (d *Daemon) cleanupOrphanedProcesses() {
 
 // pruneStaleBranches removes stale local polecat tracking branches from all rig clones.
 // This runs in every heartbeat but is very fast when there are no stale branches.
+// pushUnpushedMerges checks each rig for locally-merged-but-not-pushed commits
+// on the working branch. If the refinery session died between git merge and
+// git push, the local branch has the merge but the remote doesn't. This pushes
+// any unpushed commits to recover from that failure mode.
+func (d *Daemon) pushUnpushedMerges() {
+	rigs := d.getKnownRigs()
+	for _, rigName := range rigs {
+		rigDir := filepath.Join(d.config.TownRoot, rigName)
+		repoGit := filepath.Join(rigDir, ".repo.git")
+		if _, err := os.Stat(repoGit); os.IsNotExist(err) {
+			continue
+		}
+
+		// Determine the working branch for this rig
+		r := &rig.Rig{Name: rigName, Path: rigDir}
+		branch := r.WorkingBranch()
+
+		// Get local branch HEAD
+		localCmd := exec.Command("git", "--git-dir", repoGit, "rev-parse", branch)
+		localOut, err := localCmd.Output()
+		if err != nil {
+			continue // Branch doesn't exist locally
+		}
+		localHEAD := strings.TrimSpace(string(localOut))
+
+		// Get remote branch HEAD via ls-remote (doesn't require fetch)
+		remoteCmd := exec.Command("git", "--git-dir", repoGit, "ls-remote", "origin", "refs/heads/"+branch)
+		remoteOut, err := remoteCmd.Output()
+		if err != nil || len(strings.TrimSpace(string(remoteOut))) == 0 {
+			continue // Remote branch doesn't exist or unreachable
+		}
+		remoteHEAD := strings.Fields(strings.TrimSpace(string(remoteOut)))[0]
+
+		if localHEAD == remoteHEAD {
+			continue // In sync
+		}
+
+		d.logger.Printf("MERGE_CONSISTENCY: rig %s has unpushed commit(s) on %s (local=%s, remote=%s), pushing",
+			rigName, branch, localHEAD[:8], remoteHEAD[:8])
+
+		pushCmd := exec.Command("git", "--git-dir", repoGit, "push", "origin", branch)
+		if pushOutput, err := pushCmd.CombinedOutput(); err != nil {
+			d.logger.Printf("Warning: failed to push unpushed merges for %s: %s: %v", rigName, strings.TrimSpace(string(pushOutput)), err)
+		} else {
+			d.logger.Printf("MERGE_CONSISTENCY: pushed to origin/%s for rig %s", branch, rigName)
+		}
+	}
+}
+
 func (d *Daemon) pruneStaleBranches() {
 	// pruneInDir prunes stale polecat branches in a single git directory.
 	pruneInDir := func(dir, label string) {

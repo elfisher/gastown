@@ -358,7 +358,7 @@ func (e *Engineer) fastForwardBatch(ctx context.Context, stacked []*MRInfo, targ
 
 	// Acquire merge slot for default branch pushes
 	var pushHolder string
-	if target == e.rig.DefaultBranch() {
+	if target == e.rig.DefaultBranch() || target == e.rig.WorkingBranch() {
 		var slotErr error
 		pushHolder, slotErr = e.acquireMainPushSlot(ctx)
 		if slotErr != nil {

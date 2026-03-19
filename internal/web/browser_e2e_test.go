@@ -83,6 +83,7 @@ func (m *mockFetcher) FetchConvoys() ([]ConvoyRow, error) {
 }
 
 func (m *mockFetcher) FetchMergeQueue() ([]MergeQueueRow, error) { return nil, nil }
+func (m *mockFetcher) FetchPipeline() ([]PipelineRow, error)    { return nil, nil }
 func (m *mockFetcher) FetchWorkers() ([]WorkerRow, error)        { return nil, nil }
 func (m *mockFetcher) FetchMail() ([]MailRow, error)             { return nil, nil }
 func (m *mockFetcher) FetchRigs() ([]RigRow, error)              { return nil, nil }
@@ -96,8 +97,9 @@ func (m *mockFetcher) FetchSessions() ([]SessionRow, error)   { return nil, nil 
 func (m *mockFetcher) FetchHooks() ([]HookRow, error)         { return nil, nil }
 func (m *mockFetcher) FetchMayor() (*MayorStatus, error)      { return nil, nil }
 func (m *mockFetcher) FetchIssues() ([]IssueRow, error)       { return nil, nil }
-func (m *mockFetcher) FetchActivity() ([]ActivityRow, error)  { return nil, nil }
-func (m *mockFetcher) FetchDigest() (*DigestData, error)      { return nil, nil }
+func (m *mockFetcher) FetchActivity() ([]ActivityRow, error)    { return nil, nil }
+func (m *mockFetcher) FetchScoreboard() (*ScoreboardData, error) { return nil, nil }
+func (m *mockFetcher) FetchDigest() (*DigestData, error)        { return nil, nil }
 
 // TestBrowser_ConvoyListLoads tests that the convoy list page loads correctly
 func TestBrowser_ConvoyListLoads(t *testing.T) {

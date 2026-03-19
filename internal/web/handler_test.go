@@ -1222,6 +1222,9 @@ func (m *CountingMockFetcher) FetchConvoys() ([]ConvoyRow, error) {
 func (m *CountingMockFetcher) FetchMergeQueue() ([]MergeQueueRow, error) {
 	return m.inner.FetchMergeQueue()
 }
+func (m *CountingMockFetcher) FetchPipeline() ([]PipelineRow, error) {
+	return m.inner.FetchPipeline()
+}
 func (m *CountingMockFetcher) FetchWorkers() ([]WorkerRow, error)       { return m.inner.FetchWorkers() }
 func (m *CountingMockFetcher) FetchMail() ([]MailRow, error)            { return m.inner.FetchMail() }
 func (m *CountingMockFetcher) FetchRigs() ([]RigRow, error)             { return m.inner.FetchRigs() }
@@ -1240,6 +1243,9 @@ func (m *CountingMockFetcher) FetchActivity() ([]ActivityRow, error) {
 }
 func (m *CountingMockFetcher) FetchDigest() (*DigestData, error) {
 	return m.inner.FetchDigest()
+}
+func (m *CountingMockFetcher) FetchScoreboard() (*ScoreboardData, error) {
+	return m.inner.FetchScoreboard()
 }
 
 func TestConvoyHandler_NonFatalErrors(t *testing.T) {

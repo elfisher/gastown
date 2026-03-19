@@ -163,7 +163,7 @@
                                 {{range .Convoys}}
                                 <tr class="convoy-row" data-convoy-id="{{.ID}}">
                                     <td>
-                                        <span class="convoy-toggle">▶</span>
+                                        <span class="convoy-toggle">▼</span>
                                         {{if eq .WorkStatus "complete"}}
                                         <span class="badge badge-green" title="All issues completed">✓ Done</span>
                                         {{else if eq .WorkStatus "active"}}
@@ -206,6 +206,33 @@
                                         {{.LastActivity.FormattedAge}}
                                     </td>
                                 </tr>
+                                {{if .TrackedIssues}}
+                                <tr class="convoy-detail-row convoy-expanded" data-convoy-id="{{.ID}}">
+                                    <td colspan="5">
+                                        <div class="tracked-issues">
+                                            <table class="tracked-issues-table">
+                                                <thead><tr><th>Status</th><th>ID</th><th>Title</th><th>Assignee</th></tr></thead>
+                                                <tbody>
+                                                    {{range .TrackedIssues}}
+                                                    <tr class="tracked-issue-row tracked-issue-{{.Status}}">
+                                                        <td>
+                                                            {{if eq .Status "closed"}}<span class="badge badge-green">Done</span>
+                                                            {{else if eq .Status "in_progress"}}<span class="badge badge-yellow">In Progress</span>
+                                                            {{else if eq .Status "hooked"}}<span class="badge badge-blue">Hooked</span>
+                                                            {{else}}<span class="badge badge-muted">Open</span>
+                                                            {{end}}
+                                                        </td>
+                                                        <td><span class="issue-id">{{linkify .ID}}</span></td>
+                                                        <td class="tracked-issue-title">{{.Title}}</td>
+                                                        <td class="tracked-issue-assignee">{{if .Assignee}}{{.Assignee}}{{else}}—{{end}}</td>
+                                                    </tr>
+                                                    {{end}}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {{end}}
                                 {{end}}
                             </tbody>
                         </table>

@@ -148,6 +148,20 @@ func AgentEnv(cfg AgentEnvConfig) map[string]string {
 		env["BEADS_AGENT_NAME"] = fmt.Sprintf("%s/%s", cfg.Rig, cfg.AgentName)
 	}
 
+	// Suppress interactive prompts from npm/npx in autonomous agent sessions.
+	// npx prompts "Need to install X, proceed? (y)" which hangs polecats.
+	// CI=true makes npm/npx non-interactive (auto-yes for installs, no progress bars).
+	env["CI"] = "true"
+
+	// Kiro's execute_bash can't handle interactive prompts (documented limitation).
+	// Set GIT_EDITOR and other env vars to prevent tools from opening editors.
+	// This is Kiro-specific — Claude Code can interact with vim/editors natively.
+	if cfg.Agent == string(AgentKiro) || cfg.Agent == "" {
+		env["GIT_EDITOR"] = "true"
+		env["EDITOR"] = "true"
+		env["VISUAL"] = "true"
+	}
+
 	// Add optional runtime config directory
 	if cfg.RuntimeConfigDir != "" {
 		env["CLAUDE_CONFIG_DIR"] = cfg.RuntimeConfigDir

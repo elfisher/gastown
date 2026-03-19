@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "agentSpawn": [
+      {
+        "command": "export PATH=\"$HOME/go/bin:$HOME/.local/bin:$HOME/bin:$PATH\" && gt prime --hook"
+      }
+    ]
+  }
+}

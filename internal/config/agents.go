@@ -36,6 +36,8 @@ const (
 	// AgentOmp is Oh My Pi (OMP) — Pi fork with hook-based lifecycle.
 	// Inspired by github.com/ProbabilityEngineer/pi-mono gastown integration.
 	AgentOmp AgentPreset = "omp"
+	// AgentKiro is Kiro CLI (Amazon's AI coding assistant).
+	AgentKiro AgentPreset = "kiro"
 )
 
 // AgentPresetInfo contains the configuration details for an agent preset.
@@ -151,6 +153,15 @@ type AgentPresetInfo struct {
 	// active request. When true, NudgeSessionWithOpts skips the Escape
 	// keystroke and the 600ms readline timeout that follows it.
 	EscapeCancelsRequest bool `json:"escape_cancels_request,omitempty"`
+
+	// CompactCommand is the slash command to compact the agent's context.
+	// Sent via tmux send-keys when context usage exceeds CompactThreshold.
+	// For Kiro: "/compact". Empty means the agent doesn't support compaction.
+	CompactCommand string `json:"compact_command,omitempty"`
+
+	// CompactThreshold is the context usage percentage (0-100) above which
+	// Gas Town should trigger compaction. 0 means no auto-compact.
+	CompactThreshold int `json:"compact_threshold,omitempty"`
 
 	// ACP is the configuration for ACP (Agent Communication Protocol) support.
 	// nil means the agent does not support ACP.
@@ -422,6 +433,29 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 		NonInteractive: &NonInteractiveConfig{
 			PromptFlag: "--prompt",
 		},
+	},
+	AgentKiro: {
+		Name:                AgentKiro,
+		Command:             "kiro-cli",
+		Args:                []string{"chat", "--trust-all-tools"},
+		ProcessNames:        []string{"kiro-cli", "kiro-cli-chat"},
+		SessionIDEnv:        "",
+		ResumeFlag:          "",     // Kiro --resume takes no session ID, not compatible with GT resume
+		ContinueFlag:        "--resume", // --resume without args resumes most recent conversation
+		ResumeStyle:         "flag",
+		SupportsHooks:       true,
+		SupportsForkSession: false,
+		NonInteractive:      nil,
+		PromptMode:          "arg",
+		ReadyPromptPrefix:   "",
+		ReadyDelayMs:        20000,
+		InstructionsFile:    "AGENTS.md",
+		HooksProvider:       "kiro",
+		HooksDir:            ".kiro/agents",
+		HooksSettingsFile:   "gastown.json",
+		HasTurnBoundaryDrain: true,
+		CompactCommand:      "/compact Retain: your role, current task, and active work context. Discard: previous task tool outputs and file contents.",
+		CompactThreshold:    50,
 	},
 }
 

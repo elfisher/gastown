@@ -74,13 +74,14 @@ export async function getProjectsData(filters?: {
   // Build convoy-based projects
   const convoyBeadIds = new Set<string>();
   for (const c of convoys) {
-    const issueIds = c.issues ?? [];
+    // Support both old `issues` (string[]) and new `tracked` (object[]) formats
+    const issueIds = c.issues ?? c.tracked?.map((t) => t.id) ?? [];
     const beads = workBeads.filter((b) => issueIds.includes(b.id));
     for (const id of issueIds) convoyBeadIds.add(id);
     const prog = beadProgress(beads);
     projects.push({
       id: c.id,
-      name: c.name,
+      name: c.name ?? c.title ?? c.id,
       type: "convoy",
       status: c.status,
       beads,

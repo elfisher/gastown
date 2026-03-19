@@ -23,7 +23,7 @@ export async function renderConvoyPage(id: string): Promise<string> {
     return `<div class="prose"><h1>Convoy Not Found</h1><p>No convoy with ID "${escapeHtml(id)}".</p></div>`;
   }
 
-  const issueIds = convoy.issues ?? [];
+  const issueIds = convoy.issues ?? convoy.tracked?.map((t) => t.id) ?? [];
   // Fetch all beads to find convoy members and their deps
   let allBeads: Bead[] = [];
   try {
@@ -70,11 +70,13 @@ export async function renderConvoyPage(id: string): Promise<string> {
   // Serialize DAG data for client-side ELK rendering
   const dagData = JSON.stringify({ nodes, edges });
 
+  const convoyName = convoy.name ?? convoy.title ?? convoy.id;
+
   return `
-${breadcrumbs([{ label: "Gas Town", href: "/" }, { label: "Convoys", href: "/convoys" }, { label: convoy.name }])}
+${breadcrumbs([{ label: "Gas Town", href: "/" }, { label: "Convoys", href: "/convoys" }, { label: convoyName }])}
 
 <div class="prose max-w-none mb-6">
-  <h1>Convoy: ${escapeHtml(convoy.name)}</h1>
+  <h1>Convoy: ${escapeHtml(convoyName)}</h1>
   <div class="flex gap-2 items-center not-prose">
     ${statusBadge(convoy.status)}
     <span class="badge badge-ghost">${escapeHtml(convoy.id)}</span>

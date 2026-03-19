@@ -98,14 +98,29 @@ export interface BeadHistoryEntry {
 }
 
 // --- Convoy ---
+export const ConvoyTrackedSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: z.string(),
+  dependency_type: z.string().optional(),
+  issue_type: z.string().optional(),
+  blocked: z.boolean().optional(),
+  assignee: z.string().optional(),
+});
+export type ConvoyTracked = z.infer<typeof ConvoyTrackedSchema>;
+
 export const ConvoySchema = z.object({
   id: z.string(),
-  name: z.string(),
+  name: z.string().optional(),
+  title: z.string().optional(),
   status: z.string(),
   created_at: z.string(),
   updated_at: z.string().optional(),
   issues: z.array(z.string()).optional(),
+  tracked: z.array(ConvoyTrackedSchema).optional(),
   issue_count: z.number().optional(),
+  completed: z.number().optional(),
+  total: z.number().optional(),
 });
 export type Convoy = z.infer<typeof ConvoySchema>;
 export const ConvoyListSchema = z.array(ConvoySchema);

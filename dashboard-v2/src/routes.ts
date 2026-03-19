@@ -12,6 +12,7 @@ import { renderRigPage } from "./pages/rig.js";
 import { renderConvoyPage } from "./pages/convoy.js";
 import { renderBeadPage } from "./pages/bead.js";
 import { renderConvoyListPage } from "./pages/convoy-list.js";
+import { renderTourPage } from "./pages/tour.js";
 import { registerPipelineApi } from "./api/pipeline.js";
 import { renderAgentsPage, renderAgentDetailPage } from "./pages/agents.js";
 import { registerAgentsApi } from "./api/agents.js";
@@ -93,7 +94,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/tour", async (_req, reply) => {
-    const html = await withLayout("Tour", placeholder("Tour"), "/tour");
+    const html = await withLayout("Tour", renderTourPage(), "/tour");
     return reply.type("text/html").send(html);
   });
 

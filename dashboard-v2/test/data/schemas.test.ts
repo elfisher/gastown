@@ -67,8 +67,8 @@ describe("ConvoySchema", () => {
     expect(ConvoySchema.parse(validConvoy)).toEqual(validConvoy);
   });
 
-  it("rejects missing name", () => {
-    expect(() => ConvoySchema.parse({ id: "x", status: "active", created_at: "2026" })).toThrow();
+  it("rejects missing status", () => {
+    expect(() => ConvoySchema.parse({ id: "x", created_at: "2026" })).toThrow();
   });
 });
 

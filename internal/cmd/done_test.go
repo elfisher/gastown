@@ -1348,3 +1348,84 @@ func testRunGit(t *testing.T, dir string, args ...string) {
 		t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
 	}
 }
+
+func TestRunHarnessGates_NoHarness(t *testing.T) {
+	dir := t.TempDir()
+	result := runHarnessGates(dir)
+	if result != nil {
+		t.Fatalf("expected nil result when no harness configured, got: %+v", result)
+	}
+}
+
+func TestRunHarnessGates_PassingHarness(t *testing.T) {
+	dir := t.TempDir()
+	harnessDir := filepath.Join(dir, ".gastown")
+	if err := os.MkdirAll(harnessDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	yaml := `tier0:
+  - echo pass
+`
+	if err := os.WriteFile(filepath.Join(harnessDir, "harness.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := runHarnessGates(dir)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if !result.Success {
+		t.Fatalf("expected harness to pass, got: %s", result.Summary())
+	}
+}
+
+func TestRunHarnessGates_FailingHarness(t *testing.T) {
+	dir := t.TempDir()
+	harnessDir := filepath.Join(dir, ".gastown")
+	if err := os.MkdirAll(harnessDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	yaml := `tier0:
+  - "false"
+`
+	if err := os.WriteFile(filepath.Join(harnessDir, "harness.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := runHarnessGates(dir)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.Success {
+		t.Fatal("expected harness to fail")
+	}
+}
+
+func TestRunHarnessGates_Tier0FailSkipsTier1(t *testing.T) {
+	dir := t.TempDir()
+	harnessDir := filepath.Join(dir, ".gastown")
+	if err := os.MkdirAll(harnessDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// tier0 fails, tier1 should never run
+	marker := filepath.Join(dir, "tier1-ran")
+	yaml := fmt.Sprintf(`tier0:
+  - "false"
+tier1:
+  - touch %s
+`, marker)
+	if err := os.WriteFile(filepath.Join(harnessDir, "harness.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := runHarnessGates(dir)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.Success {
+		t.Fatal("expected harness to fail on tier0")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("tier1 should not have run when tier0 failed")
+	}
+}

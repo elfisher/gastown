@@ -15,6 +15,7 @@ import (
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/events"
 	"github.com/steveyegge/gastown/internal/git"
+	"github.com/steveyegge/gastown/internal/harness"
 	"github.com/steveyegge/gastown/internal/mail"
 	"github.com/steveyegge/gastown/internal/polecat"
 	"github.com/steveyegge/gastown/internal/rig"
@@ -473,6 +474,19 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 
 			// Skip straight to witness notification (no MR needed)
 			goto notifyWitness
+		}
+
+		// Verification contracts (gt-6vm): run harness gates before submitting.
+		// If .gastown/harness.yaml exists, load tiered commands and run them.
+		// Any failure blocks MR submission — the bead stays hooked.
+		if cwdAvailable {
+			harnessResult := runHarnessGates(cwd)
+			if harnessResult != nil && !harnessResult.Success {
+				return fmt.Errorf("harness verification failed: %s\n"+
+					"Fix the failing command and retry gt done.\n"+
+					"To skip harness: gt done --status DEFERRED",
+					harnessResult.Summary())
+			}
 		}
 
 		// Branch contamination preflight: check if branch is significantly behind
@@ -1557,4 +1571,47 @@ func purgeClosedEphemeralBeads(bd *beads.Beads) {
 	if outStr != "" && outStr != "0" {
 		fmt.Fprintf(os.Stderr, "Purged closed ephemeral beads: %s\n", outStr)
 	}
+}
+
+// runHarnessGates loads and runs the verification harness for the given workdir.
+// Returns nil if no harness is configured (harness is optional).
+// Returns the Result if harness was run (caller checks .Success).
+func runHarnessGates(workdir string) *harness.Result {
+	tiers, err := harness.LoadHarness(workdir)
+	if err != nil {
+		style.PrintWarning("harness config error: %v (skipping verification)", err)
+		return nil
+	}
+	if len(tiers) == 0 {
+		return nil // No harness configured
+	}
+
+	fmt.Printf("\n%s Running verification harness...\n", style.Bold.Render("🔍"))
+	for i, tier := range tiers {
+		fmt.Printf("  Tier %d: %d command(s)\n", i, len(tier))
+	}
+	fmt.Println()
+
+	ctx := context.Background()
+	result := harness.RunTiered(ctx, workdir, tiers)
+
+	if result.Success {
+		fmt.Printf("%s Harness passed (%d commands)\n\n", style.Bold.Render("✓"), len(result.Results))
+	} else {
+		fmt.Printf("%s Harness FAILED\n", style.Bold.Render("✗"))
+		if result.FailedAt >= 0 && result.FailedAt < len(result.Results) {
+			cr := result.Results[result.FailedAt]
+			fmt.Printf("  Command: %s\n", cr.Command)
+			fmt.Printf("  Exit code: %d\n", cr.ExitCode)
+			if cr.Stdout != "" {
+				fmt.Printf("  Stdout:\n%s\n", cr.Stdout)
+			}
+			if cr.Stderr != "" {
+				fmt.Printf("  Stderr:\n%s\n", cr.Stderr)
+			}
+		}
+		fmt.Println()
+	}
+
+	return &result
 }

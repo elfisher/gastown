@@ -1,4 +1,5 @@
 import { exec } from "./exec.js";
+import { cached } from "./cache.js";
 import { BeadListSchema, type Bead, type Convoy } from "./schemas.js";
 import { listConvoys } from "./convoys.js";
 import { getGtRoot } from "../config.js";
@@ -39,11 +40,13 @@ export async function getProjectsData(filters?: {
   // Fetch all beads including epics
   let allBeads: Bead[];
   try {
-    const { stdout } = await exec("bd", ["list", "--status=all", "--json"], {
-      cwd: root,
-      timeoutMs: 15_000,
-    });
-    allBeads = BeadListSchema.parse(JSON.parse(stdout));
+    allBeads = await cached("projects:allbeads", async () => {
+      const { stdout } = await exec("bd", ["list", "--status=all", "--json"], {
+        cwd: root,
+        timeoutMs: 15_000,
+      });
+      return BeadListSchema.parse(JSON.parse(stdout));
+    }, 10_000);
   } catch {
     allBeads = [];
   }

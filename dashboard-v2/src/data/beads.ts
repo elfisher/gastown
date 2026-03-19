@@ -1,23 +1,29 @@
 import { exec } from "./exec.js";
+import { cached } from "./cache.js";
 import { BeadListSchema, BeadDetailSchema, type Bead, type BeadDetail, type BeadHistoryEntry } from "./schemas.js";
 import { getGtRoot } from "../config.js";
 
 export async function listBeads(rig?: string): Promise<Bead[]> {
-  const root = getGtRoot();
-  const cwd = rig ? `${root}/${rig}` : root;
-  try {
-    const { stdout } = await exec("bd", ["list", "--json"], { cwd });
-    return BeadListSchema.parse(JSON.parse(stdout));
-  } catch {
-    return [];
-  }
+  const key = `beads:list:${rig ?? "all"}`;
+  return cached(key, async () => {
+    const root = getGtRoot();
+    const cwd = rig ? `${root}/${rig}` : root;
+    try {
+      const { stdout } = await exec("bd", ["list", "--json"], { cwd });
+      return BeadListSchema.parse(JSON.parse(stdout));
+    } catch {
+      return [];
+    }
+  }, 10_000);
 }
 
 export async function getBead(id: string): Promise<BeadDetail> {
-  const root = getGtRoot();
-  const { stdout } = await exec("bd", ["show", id, "--json"], { cwd: root });
-  const arr = JSON.parse(stdout);
-  return BeadDetailSchema.parse(Array.isArray(arr) ? arr[0] : arr);
+  return cached(`beads:show:${id}`, async () => {
+    const root = getGtRoot();
+    const { stdout } = await exec("bd", ["show", id, "--json"], { cwd: root });
+    const arr = JSON.parse(stdout);
+    return BeadDetailSchema.parse(Array.isArray(arr) ? arr[0] : arr);
+  });
 }
 
 export async function getBeadDeps(id: string): Promise<{ dependencies: BeadDetail["dependencies"]; dependents: BeadDetail["dependents"] }> {

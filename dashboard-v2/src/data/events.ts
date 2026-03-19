@@ -1,4 +1,5 @@
 import { exec } from "./exec.js";
+import { cached } from "./cache.js";
 import type { Event } from "./schemas.js";
 import { getGtRoot } from "../config.js";
 
@@ -85,19 +86,22 @@ function filterRecoveryNoise(events: Event[]): Event[] {
 }
 
 export async function getEvents(since?: string): Promise<Event[]> {
-  const root = getGtRoot();
-  const args = ["feed", "--plain"];
-  if (since) args.push("--since", since);
-  try {
-    const { stdout } = await exec("gt", args, { cwd: root, timeout: 10_000 });
-    const raw = stdout
-      .split("\n")
-      .map(parseFeedLine)
-      .filter((e): e is Event => e !== null);
-    return filterRecoveryNoise(raw);
-  } catch {
-    return [];
-  }
+  const key = `events:${since ?? "default"}`;
+  return cached(key, async () => {
+    const root = getGtRoot();
+    const args = ["feed", "--plain"];
+    if (since) args.push("--since", since);
+    try {
+      const { stdout } = await exec("gt", args, { cwd: root, timeout: 10_000 });
+      const raw = stdout
+        .split("\n")
+        .map(parseFeedLine)
+        .filter((e): e is Event => e !== null);
+      return filterRecoveryNoise(raw);
+    } catch {
+      return [];
+    }
+  });
 }
 
 export async function getEventsForRig(rigName: string, since?: string): Promise<Event[]> {

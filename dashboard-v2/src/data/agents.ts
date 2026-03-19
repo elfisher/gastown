@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { exec } from "./exec.js";
+import { cached } from "./cache.js";
 import { getSessionOutput } from "./terminal.js";
 import type { Agent, AgentWorkHistoryEntry } from "./schemas.js";
 
@@ -31,18 +32,20 @@ function parseSession(name: string): { rig: string; role: Agent["role"]; agentNa
 
 /** Build a map from beads_prefix (e.g. "gt") to rig name (e.g. "gastown"). */
 async function loadPrefixToRigMap(): Promise<Map<string, string>> {
-  try {
-    const { stdout } = await exec("gt", ["rig", "list", "--json"], {
-      cwd: config.townRoot,
-      timeoutMs: 5_000,
-    });
-    const jsonStart = stdout.indexOf("[");
-    if (jsonStart < 0) return new Map();
-    const rigs = JSON.parse(stdout.slice(jsonStart)) as Array<{ name: string; beads_prefix: string }>;
-    return new Map(rigs.map((r) => [r.beads_prefix, r.name]));
-  } catch {
-    return new Map();
-  }
+  return cached("agents:prefixmap", async () => {
+    try {
+      const { stdout } = await exec("gt", ["rig", "list", "--json"], {
+        cwd: config.townRoot,
+        timeoutMs: 5_000,
+      });
+      const jsonStart = stdout.indexOf("[");
+      if (jsonStart < 0) return new Map();
+      const rigs = JSON.parse(stdout.slice(jsonStart)) as Array<{ name: string; beads_prefix: string }>;
+      return new Map(rigs.map((r) => [r.beads_prefix, r.name]));
+    } catch {
+      return new Map();
+    }
+  }, 30_000);
 }
 
 /** Derive the gt hook status target path for an agent. */
@@ -100,6 +103,12 @@ async function getRecentDeaths(): Promise<Set<string>> {
 }
 
 export async function listAgents(): Promise<Agent[]> {
+  return cached("agents:list", async () => {
+    return listAgentsUncached();
+  });
+}
+
+async function listAgentsUncached(): Promise<Agent[]> {
   let stdout: string;
   try {
     const result = await exec(

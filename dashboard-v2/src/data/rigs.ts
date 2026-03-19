@@ -1,13 +1,16 @@
 import { join } from "node:path";
 import { config } from "../config.js";
 import { exec } from "./exec.js";
+import { cached } from "./cache.js";
 import { RigListSchema, MergeQueueSchema, type Rig, type MergeQueueItem, type RepoInfo } from "./schemas.js";
 
 export async function listRigs(): Promise<Rig[]> {
-  const result = await exec("gt", ["rig", "list", "--json"], {
-    cwd: config.townRoot,
-  });
-  return RigListSchema.parse(JSON.parse(result.stdout));
+  return cached("rigs:list", async () => {
+    const result = await exec("gt", ["rig", "list", "--json"], {
+      cwd: config.townRoot,
+    });
+    return RigListSchema.parse(JSON.parse(result.stdout));
+  }, 30_000);
 }
 
 export async function getRig(name: string): Promise<Rig | undefined> {
@@ -27,14 +30,16 @@ export async function getRigRepoInfo(name: string): Promise<RepoInfo | undefined
 }
 
 export async function getMergeQueue(name: string): Promise<MergeQueueItem[]> {
-  try {
-    const result = await exec("gt", ["mq", "list", name, "--json"], {
-      cwd: config.townRoot,
-    });
-    const parsed = JSON.parse(result.stdout);
-    if (!Array.isArray(parsed)) return [];
-    return MergeQueueSchema.parse(parsed);
-  } catch {
-    return [];
-  }
+  return cached(`rigs:mq:${name}`, async () => {
+    try {
+      const result = await exec("gt", ["mq", "list", name, "--json"], {
+        cwd: config.townRoot,
+      });
+      const parsed = JSON.parse(result.stdout);
+      if (!Array.isArray(parsed)) return [];
+      return MergeQueueSchema.parse(parsed);
+    } catch {
+      return [];
+    }
+  });
 }

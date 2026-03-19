@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { exec } from "./exec.js";
+import { cached } from "./cache.js";
 import { getSessionLines } from "./terminal.js";
 import type { MayorMessage } from "./schemas.js";
 

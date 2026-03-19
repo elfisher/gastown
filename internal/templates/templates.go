@@ -98,6 +98,15 @@ type EscalationData struct {
 	Suggestions []string
 }
 
+// PlanData contains information for the goal-to-convoy planning prompt.
+type PlanData struct {
+	RigName         string // target rig name
+	GitURL          string // rig's git remote URL
+	BaseBranch      string // default branch (e.g., "main")
+	OpenBeadSummary string // output of bd list for context
+	Goal            string // user's goal description
+}
+
 // HandoffData contains information for session handoff messages.
 type HandoffData struct {
 	Role        string
@@ -168,7 +177,7 @@ func (t *Templates) RoleNames() []string {
 
 // MessageNames returns the list of available message templates.
 func (t *Templates) MessageNames() []string {
-	return []string{"spawn", "nudge", "escalation", "handoff"}
+	return []string{"spawn", "nudge", "escalation", "handoff", "plan"}
 }
 
 // CreateMayorCLAUDEmd creates the Mayor's CLAUDE.md file at the specified directory.

@@ -1,0 +1,70 @@
+I want to plan work for the {{ .RigName }} rig.
+
+Codebase: {{ .GitURL }}
+Working branch: {{ .BaseBranch }}
+{{ if .OpenBeadSummary }}
+Current open beads:
+{{ .OpenBeadSummary }}
+{{ end }}
+Goal: {{ .Goal }}
+
+Instructions:
+
+1. Explore the {{ .RigName }} codebase to understand what's relevant to this goal.
+   Use shell commands to navigate: ls, cat, grep, find, git log.
+   Focus on understanding the existing architecture before proposing changes.
+
+2. Break the goal into concrete tasks. Each task should be one polecat's
+   worth of work — a few hours of focused, well-scoped implementation.
+   Prefer smaller tasks over larger ones.
+
+3. Assign each task a group number for execution ordering:
+   - Same group = parallel (no dependencies between them)
+   - Groups run sequentially (group 1 finishes before group 2 starts)
+   - Put foundational work (types, interfaces, schemas) in earlier groups
+   - Put integration and wiring in later groups
+
+4. Present the plan as a table:
+
+   | # | Task | Group | Priority | Description |
+   |---|------|-------|----------|-------------|
+   | 1 | Short title | 1 | P1 | What to implement and where |
+   | 2 | ... | 1 | P2 | ... |
+
+5. Ask me to approve, edit, or reject the plan.
+   Wait for my response before proceeding.
+
+6. When I say "approve", "go", "lgtm", or similar:
+
+   a. Create beads for each task:
+      ```
+      bd create "<title>" --type=task --priority=<N> --description="<description>"
+      ```
+
+   b. Set dependencies between groups. For each task in group N>1,
+      add a dependency on at least one task from group N-1:
+      ```
+      bd dep add <later-task-id> <earlier-task-id>
+      ```
+
+   c. Create a convoy with all the bead IDs:
+      ```
+      {{ cmd }} convoy create "<goal summary>" <bead-id-1> <bead-id-2> ...
+      ```
+
+   d. Dispatch group 1 (only tasks with no unmet dependencies):
+      ```
+      {{ cmd }} sling <bead-id> {{ .RigName }}
+      ```
+
+   e. Report what you created:
+      - Convoy ID and name
+      - List of beads with IDs, titles, and group assignments
+      - Which beads were dispatched (group 1)
+      - Which beads are waiting on dependencies (groups 2+)
+
+7. Do NOT dispatch beads from later groups. The witness and deacon handle
+   dependency-based dispatch automatically as earlier groups complete.
+
+8. If the goal is unclear or too large for a single convoy, say so and
+   suggest how to break it into multiple planning sessions.

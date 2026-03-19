@@ -586,8 +586,7 @@ func TestEnsureDatabaseInitialized(t *testing.T) {
 		}
 	})
 
-	t.Run("metadata.json exists but db missing — attempts init", func(t *testing.T) {
-		logPath := installMockBDRecorder(t)
+	t.Run("metadata.json exists but db missing — returns error instead of reinit", func(t *testing.T) {
 		// metadata.json references a database that doesn't exist in .dolt-data/
 		townDir := t.TempDir()
 		mayorDir := filepath.Join(townDir, "mayor")
@@ -602,15 +601,12 @@ func TestEnsureDatabaseInitialized(t *testing.T) {
 		meta := `{"dolt_mode":"server","dolt_database":"missing_db"}`
 		os.WriteFile(filepath.Join(beadsDir, "metadata.json"), []byte(meta), 0644)
 
-		if err := ensureDatabaseInitialized(beadsDir); err != nil {
-			t.Fatalf("ensureDatabaseInitialized: %v", err)
+		err := ensureDatabaseInitialized(beadsDir)
+		if err == nil {
+			t.Fatal("expected error when metadata exists but db is missing")
 		}
-
-		logOutput := readMockBDLog(t, logPath)
-		for _, want := range []string{"init --prefix gt --server", "config set issue_prefix", "migrate --yes"} {
-			if !strings.Contains(logOutput, want) {
-				t.Fatalf("mock bd log %q missing %q", logOutput, want)
-			}
+		if !strings.Contains(err.Error(), "do NOT run bd init") {
+			t.Fatalf("expected 'do NOT run bd init' in error, got: %v", err)
 		}
 	})
 

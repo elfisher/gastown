@@ -233,8 +233,9 @@ func (b *Beads) CreateAgentBead(id, title string, fields *AgentFields) (*Issue, 
 		return a
 	}
 
-	// Create agent bead in the issues table. Agent beads are durable
-	// identities that must survive wisp GC (GH#2768).
+	// Create agent bead in the issues table to skip
+	// git commit overhead. Agent beads are durable identities that must
+	// survive wisp GC (GH#2768).
 	out, err := b.run(buildArgs()...)
 	if err != nil {
 		out, err = b.run(buildArgs()...)
@@ -343,7 +344,6 @@ func (b *Beads) CreateOrReopenAgentBead(id, title string, fields *AgentFields) (
 	if _, err := target.run("update", id, "--type=agent"); err != nil {
 		return nil, fmt.Errorf("fixing agent bead type: %w", err)
 	}
-
 	// Note: role slot no longer set - role definitions are config-based
 
 	// Set hook_bead slot so gt mol status can find hooked work via the

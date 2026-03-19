@@ -324,23 +324,15 @@ func (c *RigConfigSyncCheck) Fix(ctx *CheckContext) error {
 		}
 	}
 
-	// Fix missing Dolt databases by running bd init
+	// Report missing Dolt databases but NEVER auto-reinitialize.
+	// Running bd init --force destroys all existing beads data.
+	// If the database appears missing, it's almost always a transient
+	// Dolt server connectivity issue, not a genuinely missing database.
+	// The human must diagnose and fix manually.
 	for _, rigName := range c.missingDoltDB {
-		entry, ok := rigsConfig.Rigs[rigName]
-		if !ok || entry.BeadsConfig == nil {
-			continue
-		}
-
-		rigPath := filepath.Join(ctx.TownRoot, rigName)
-		mayorRigPath := filepath.Join(rigPath, "mayor", "rig")
-
-		// Run bd init --prefix <prefix> --force --destroy-token to create the database
-		destroyToken := fmt.Sprintf("DESTROY-%s", entry.BeadsConfig.Prefix)
-		cmd := exec.Command("bd", "init", "--prefix", entry.BeadsConfig.Prefix, "--force", "--destroy-token="+destroyToken)
-		cmd.Dir = mayorRigPath
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("could not initialize Dolt DB for %s: %w\n%s", rigName, err, string(output))
-		}
+		fmt.Fprintf(os.Stderr, "⚠ Rig %s: Dolt database appears missing. Do NOT run bd init.\n", rigName)
+		fmt.Fprintf(os.Stderr, "  Diagnose: gt dolt start && bd dolt status\n")
+		fmt.Fprintf(os.Stderr, "  This is usually a transient server issue, not a missing database.\n")
 	}
 
 	// Fix database name mismatches - rename database to match prefix
@@ -438,7 +430,11 @@ func (c *RigConfigSyncCheck) doltDatabaseExists(ctx *CheckContext, dbName string
 	// Use the doltserver package to list databases
 	databases, err := doltserver.ListDatabases(ctx.TownRoot)
 	if err != nil {
-		return false
+		// If we can't reach the server, assume the database exists.
+		// Returning false here would cause --fix to run bd init --force,
+		// which destroys all beads data. A transient connection failure
+		// must never trigger a destructive reinit.
+		return true
 	}
 
 	for _, db := range databases {

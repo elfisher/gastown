@@ -15,6 +15,7 @@ import (
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/events"
 	"github.com/steveyegge/gastown/internal/git"
+	"github.com/steveyegge/gastown/internal/harness"
 	"github.com/steveyegge/gastown/internal/mail"
 	"github.com/steveyegge/gastown/internal/polecat"
 	"github.com/steveyegge/gastown/internal/rig"
@@ -473,6 +474,29 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 
 			// Skip straight to witness notification (no MR needed)
 			goto notifyWitness
+		}
+
+		// Verification contracts: run harness before submitting to merge queue.
+		// LoadHarness detects project type and returns tiered commands.
+		// If any tier fails, refuse to submit — bead stays hooked.
+		h := harness.LoadHarness(cwd)
+		if !h.Empty() {
+			fmt.Printf("%s Running verification harness...\n", style.Bold.Render("→"))
+			harnessResult := harness.RunTiered(context.Background(), cwd, h.Tiers())
+			if !harnessResult.Success {
+				fmt.Printf("\n%s Verification failed: %s\n", style.Bold.Render("✗"), harnessResult.Summary())
+				if harnessResult.FailedAt >= 0 && harnessResult.FailedAt < len(harnessResult.Results) {
+					cr := harnessResult.Results[harnessResult.FailedAt]
+					if cr.Stderr != "" {
+						fmt.Printf("\nStderr:\n%s\n", cr.Stderr)
+					}
+					if cr.Stdout != "" {
+						fmt.Printf("\nStdout:\n%s\n", cr.Stdout)
+					}
+				}
+				return fmt.Errorf("verification harness failed — fix the issue and retry gt done")
+			}
+			fmt.Printf("%s Verification passed (%s)\n", style.Bold.Render("✓"), harnessResult.Summary())
 		}
 
 		// Branch contamination preflight: check if branch is significantly behind

@@ -180,12 +180,16 @@ func GetStartupFallbackInfo(rc *config.RuntimeConfig) *StartupFallbackInfo {
 	if !hasHooks {
 		// Non-hook agents need to be told to run gt prime
 		info.IncludePrimeInBeacon = true
-		info.SendStartupNudge = true
-		info.StartupNudgeDelayMs = DefaultPrimeWaitMs
 
-		if !hasPrompt {
-			// No prompt support - beacon must be sent via nudge
+		if hasPrompt {
+			// Agent supports CLI prompt arg — include everything in the beacon.
+			// No nudge needed; beacon goes as positional arg at launch.
+			info.SendStartupNudge = false
+		} else {
+			// No prompt support — beacon AND work instructions must be nudged
 			info.SendBeaconNudge = true
+			info.SendStartupNudge = true
+			info.StartupNudgeDelayMs = DefaultPrimeWaitMs
 		}
 	} else if !hasPrompt {
 		// Has hooks but no prompt - need to nudge beacon + work instructions together

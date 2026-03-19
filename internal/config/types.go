@@ -651,6 +651,12 @@ type RigSettings struct {
 	// Takes precedence over RoleAgents["crew"] but is overridden by explicit --agent flags.
 	// Example: {"denali": "codex", "glacier": "gemini"}
 	WorkerAgents map[string]string `json:"worker_agents,omitempty"`
+
+	// HarnessDefaults provides fallback verification commands when no
+	// .gastown/harness.yaml exists in the repository. Keyed by tier name
+	// ("tier0", "tier1"), values are command slices.
+	// Example: {"tier0": ["go build ./...", "go test ./..."]}
+	HarnessDefaults map[string][]string `json:"harness_defaults,omitempty"`
 }
 
 // CrewConfig represents crew workspace settings for a rig.

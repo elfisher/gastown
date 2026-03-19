@@ -1758,6 +1758,32 @@ func TestMatchesPromptPrefix(t *testing.T) {
 	}
 }
 
+func TestParseContextPercent(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		lines []string
+		want  int
+	}{
+		{"kiro prompt with trust", []string{"5% !> How can I help?"}, 5},
+		{"kiro prompt without trust", []string{"12% > Need help?"}, 12},
+		{"kiro prompt high usage", []string{"50% !> working..."}, 50},
+		{"kiro prompt 100%", []string{"100% !>"}, 100},
+		{"no percentage", []string{"Hello world"}, 0},
+		{"empty lines", []string{""}, 0},
+		{"percentage in middle", []string{"some text", "8% !> ready"}, 8},
+		{"multiple lines last wins", []string{"5% !> old", "30% !> new"}, 30},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseContextPercent(tt.lines)
+			if got != tt.want {
+				t.Errorf("parseContextPercent(%v) = %d, want %d", tt.lines, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestWaitForIdle_Timeout(t *testing.T) {
 	if os.Getenv("TMUX") == "" {
 		t.Skip("not inside tmux")

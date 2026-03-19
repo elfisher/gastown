@@ -344,7 +344,8 @@ func TestGetStartupFallbackInfo_HooksNoPrompt(t *testing.T) {
 }
 
 func TestGetStartupFallbackInfo_NoHooksWithPrompt(t *testing.T) {
-	// Codex: no hooks, but has prompt support
+	// Agents with no hooks but prompt support (e.g., Kiro, Codex):
+	// Everything goes in the beacon as a CLI arg. No nudge needed.
 	rc := &config.RuntimeConfig{
 		PromptMode: "arg",
 		Hooks: &config.RuntimeHooksConfig{
@@ -356,11 +357,11 @@ func TestGetStartupFallbackInfo_NoHooksWithPrompt(t *testing.T) {
 	if !info.IncludePrimeInBeacon {
 		t.Error("NoHooks+Prompt should include prime instruction in beacon")
 	}
-	if !info.SendStartupNudge {
-		t.Error("NoHooks+Prompt should need startup nudge")
+	if info.SendStartupNudge {
+		t.Error("NoHooks+Prompt should NOT need startup nudge (beacon includes everything via CLI arg)")
 	}
-	if info.StartupNudgeDelayMs <= 0 {
-		t.Error("NoHooks+Prompt should wait for gt prime to complete")
+	if info.SendBeaconNudge {
+		t.Error("NoHooks+Prompt should NOT need beacon nudge (beacon goes as CLI arg)")
 	}
 }
 
@@ -560,10 +561,14 @@ func TestGetStartupFallbackInfo_InformationalHooks(t *testing.T) {
 		t.Error("Informational hooks should include prime instruction in beacon")
 	}
 	if !info.SendStartupNudge {
-		t.Error("Informational hooks should need startup nudge")
+		// Agent has prompt support — work instructions included in beacon, no nudge needed.
+		// This is correct: beacon goes as CLI arg, no timing-sensitive nudge required.
 	}
 	if info.SendBeaconNudge {
 		t.Error("Informational hooks with prompt should NOT need beacon nudge")
+	}
+	if info.SendStartupNudge {
+		t.Error("Informational hooks with prompt support should NOT need startup nudge (beacon includes everything)")
 	}
 }
 

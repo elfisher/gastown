@@ -54,21 +54,42 @@ describe("BeadDetailSchema", () => {
 });
 
 describe("ConvoySchema", () => {
-  const validConvoy = {
-    id: "hq-cv-abc",
-    name: "Auth System",
-    status: "active",
-    created_at: "2026-03-13",
-    issues: ["gt-abc12", "gt-def34"],
-    issue_count: 2,
-  };
-
-  it("validates a valid convoy", () => {
-    expect(ConvoySchema.parse(validConvoy)).toEqual(validConvoy);
+  it("validates a convoy with name and issues (legacy format)", () => {
+    const convoy = {
+      id: "hq-cv-abc",
+      name: "Auth System",
+      status: "active",
+      created_at: "2026-03-13",
+      issues: ["gt-abc12", "gt-def34"],
+      issue_count: 2,
+    };
+    const parsed = ConvoySchema.parse(convoy);
+    expect(parsed.name).toBe("Auth System");
+    expect(parsed.issues).toEqual(["gt-abc12", "gt-def34"]);
   });
 
-  it("rejects missing name", () => {
-    expect(() => ConvoySchema.parse({ id: "x", status: "active", created_at: "2026" })).toThrow();
+  it("validates a convoy with title and tracked (gt convoy list format)", () => {
+    const convoy = {
+      id: "hq-cv-abc",
+      title: "Auth System",
+      status: "active",
+      created_at: "2026-03-13",
+      tracked: [
+        { id: "gt-abc12", title: "Fix auth", status: "open" },
+        { id: "gt-def34", title: "Add tests", status: "closed" },
+      ],
+      completed: 1,
+      total: 2,
+    };
+    const parsed = ConvoySchema.parse(convoy);
+    expect(parsed.name).toBe("Auth System");
+    expect(parsed.issues).toEqual(["gt-abc12", "gt-def34"]);
+  });
+
+  it("falls back to id when no name or title", () => {
+    const convoy = { id: "hq-cv-x", status: "active", created_at: "2026" };
+    const parsed = ConvoySchema.parse(convoy);
+    expect(parsed.name).toBe("hq-cv-x");
   });
 });
 

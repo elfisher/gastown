@@ -98,17 +98,43 @@ export interface BeadHistoryEntry {
 }
 
 // --- Convoy ---
-export const ConvoySchema = z.object({
+const TrackedItemSchema = z.object({
   id: z.string(),
-  name: z.string(),
+  title: z.string().optional(),
+  status: z.string().optional(),
+  dependency_type: z.string().optional(),
+  issue_type: z.string().optional(),
+  blocked: z.boolean().optional(),
+  assignee: z.string().optional(),
+  worker: z.string().optional(),
+  worker_age: z.string().optional(),
+});
+const RawConvoySchema = z.object({
+  id: z.string(),
+  title: z.string().optional(),
+  name: z.string().optional(),
   status: z.string(),
   created_at: z.string(),
   updated_at: z.string().optional(),
+  tracked: z.array(TrackedItemSchema).optional(),
   issues: z.array(z.string()).optional(),
   issue_count: z.number().optional(),
+  completed: z.number().optional(),
+  total: z.number().optional(),
 });
-export type Convoy = z.infer<typeof ConvoySchema>;
-export const ConvoyListSchema = z.array(ConvoySchema);
+export const ConvoySchema = RawConvoySchema.transform((c) => ({
+  ...c,
+  name: c.name ?? c.title ?? c.id,
+  issues: c.issues ?? c.tracked?.map((t) => t.id) ?? [],
+}));
+export type Convoy = z.output<typeof ConvoySchema>;
+export const ConvoyListSchema = z.array(RawConvoySchema).transform((arr) =>
+  arr.map((c) => ({
+    ...c,
+    name: c.name ?? c.title ?? c.id,
+    issues: c.issues ?? c.tracked?.map((t) => t.id) ?? [],
+  }))
+);
 
 // --- Merge Queue ---
 export const MergeQueueItemSchema = z.object({

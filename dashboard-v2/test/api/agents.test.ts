@@ -85,24 +85,24 @@ describe("Agents API", () => {
     await app.close();
   });
 
-  it("GET /api/agents/:name/output returns HTML fragment", async () => {
+  it("GET /api/agents/:name/output returns xterm.js container", async () => {
     mockGetOutput.mockResolvedValueOnce("live output here");
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/agents/gt-furiosa/output" });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain("live output here");
+    expect(res.body).toContain("data-readonly-term-inline");
     await app.close();
   });
 
-  it("GET /agent/:name returns 200 with live output section", async () => {
+  it("GET /agent/:name returns 200 with xterm.js live output", async () => {
     mockListAgents.mockResolvedValueOnce([MOCK_AGENT]);
-    mockGetOutput.mockResolvedValueOnce("agent terminal output");
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/agent/gt-furiosa" });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("furiosa");
     expect(res.body).toContain("Live Output");
-    expect(res.body).toContain("agent terminal output");
+    expect(res.body).toContain("data-readonly-term");
+    expect(res.body).toContain("/api/terminal/gt-furiosa/raw");
     await app.close();
   });
 

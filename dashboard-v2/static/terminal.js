@@ -89,9 +89,14 @@ export function interactive(wsUrl, selector) {
 
 /**
  * Read-only terminal — polls raw tmux capture-pane output.
+ * @param {string} apiUrl - URL to poll for raw pane content
+ * @param {string|Element} selectorOrEl - CSS selector string or DOM element
+ * @param {number} interval - polling interval in ms
  */
-export function readonly(apiUrl, selector, interval = 3000) {
-  const container = document.querySelector(selector);
+export function readonly(apiUrl, selectorOrEl, interval = 3000) {
+  const container = typeof selectorOrEl === 'string'
+    ? document.querySelector(selectorOrEl)
+    : selectorOrEl;
   if (!container) return;
 
   const { term, fitAddon } = createTerminal(true);

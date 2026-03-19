@@ -97,14 +97,15 @@ describe("bead detail page", () => {
     expect(html).toContain("disabled");
   });
 
-  it("renders hooked bead with assignee and agent output", async () => {
+  it("renders hooked bead with assignee and xterm.js agent output", async () => {
     mockedGetBead.mockResolvedValue(hookedBead);
     mockedGetAgentOutput.mockResolvedValue("$ gt prime\nYou are polecat furiosa...");
     const html = await renderBeadPage("gt-def34");
     expect(html).toContain("hooked");
     expect(html).toContain("gastown/polecats/furiosa");
     expect(html).toContain("Agent Output");
-    expect(html).toContain("<pre");
+    expect(html).toContain("data-readonly-term");
+    expect(html).toContain("/api/terminal/gastown-furiosa/raw");
   });
 
   it("renders closed bead with close info", async () => {

@@ -1,7 +1,6 @@
 import { getBead, getBeadHistory } from "../data/beads.js";
 import { listConvoys } from "../data/convoys.js";
 import { getBeadBranchInfo, type BranchInfo } from "../data/git.js";
-import { getAgentOutput } from "../data/agents.js";
 import { escapeHtml, statusBadge, priorityLabel } from "./helpers.js";
 import type { BeadDetail, BeadHistoryEntry } from "../data/schemas.js";
 
@@ -234,11 +233,19 @@ function colorDiff(escaped: string): string {
   }).join("\n");
 }
 
-function renderAgentOutputSection(output: string): string {
-  if (!output || output === "(session not available)") {
+function renderAgentOutputSection(session: string): string {
+  if (!session) {
     return `<p class="text-base-content/50 text-sm">No active session</p>`;
   }
-  return `<pre class="bg-base-200 rounded-lg p-4 text-xs overflow-x-auto max-h-96 whitespace-pre-wrap"><code>${escapeHtml(output)}</code></pre>`;
+  return `<div class="bg-base-200 rounded-lg overflow-hidden" style="height:24rem"
+              data-readonly-term="/api/terminal/${encodeURIComponent(session)}/raw"></div>
+    <link rel="stylesheet" href="/vendor/xterm/xterm/css/xterm.css">
+    <script type="module">
+      import { readonly } from '/static/terminal.js';
+      document.querySelectorAll('[data-readonly-term]').forEach(el => {
+        readonly(el.dataset.readonlyTerm, el, 3000);
+      });
+    </script>`;
 }
 
 export async function renderBeadPage(id: string): Promise<string> {
@@ -280,17 +287,10 @@ export async function renderBeadPage(id: string): Promise<string> {
     }
   }
 
-  // Fetch real agent terminal output
-  let agentOutput = "";
+  // Derive tmux session for agent output
+  let agentSession = "";
   if (bead.assignee) {
-    const session = sessionFromAssignee(bead.assignee);
-    if (session) {
-      try {
-        agentOutput = await getAgentOutput(session, 40);
-      } catch {
-        // no session
-      }
-    }
+    agentSession = sessionFromAssignee(bead.assignee) ?? "";
   }
 
   return `
@@ -324,7 +324,7 @@ ${renderBreadcrumbs(bead, rigName, convoyId)}
     ${bead.assignee ? `
     <div>
       <h2 class="text-lg font-bold mb-3">Agent Output</h2>
-      ${renderAgentOutputSection(agentOutput)}
+      ${renderAgentOutputSection(agentSession)}
     </div>` : ""}
   </div>
 

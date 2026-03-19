@@ -4,6 +4,8 @@
  * Uses `tmux pipe-pane` to capture session output to log files, then reads
  * the tail of those files.  Falls back to `capture-pane` when the log file
  * doesn't exist yet (first request bootstraps pipe-pane).
+ *
+ * NOTE: No noise filtering — xterm.js renders ANSI natively on the client.
  */
 
 import { existsSync, statSync } from "node:fs";
@@ -15,63 +17,6 @@ const LOG_DIR = join(config.townRoot, ".dashboard", "logs");
 
 /** Sessions we've already started pipe-pane for. */
 const pipedSessions = new Set<string>();
-
-/** Noise patterns filtered from terminal output. */
-const NOISE_PATTERNS = [
-  /^\s*$/,
-  /^\s*[>%$#]\s*$/,
-  /hx-get=|hx-post=|hx-trigger=|hx-swap=/i,
-  /class="chat |class="alert /,
-  /chat-bubble|chat-start|chat-end/,
-  /whitespace-pre-wrap/,
-  /^\s*<\/?div/,
-  /^\s*<\/?form/,
-  /^\s*<\/?pre/,
-  /^\s*<input /,
-  /^\s*<button /,
-  /^\s*<span /,
-  /^\s*<time /,
-  // CLI noise: commands that leak from other processes or recursive captures
-  /^\s*\$\s+(curl|gt\s+nudge|gt\s+mail|tmux|docker)\b/,
-  /^\s*curl\s+(-[sS]|--silent|http)/,
-  /^\s*gt\s+nudge\s+mayor\b/,
-  // ANSI escape sequences
-  /\x1b\[[0-9;]*[a-zA-Z]/,
-  // tmux status/control lines
-  /^\s*%begin\b|^\s*%end\b|^\s*%output\b/,
-  // HTTP response fragments from curl
-  /^\s*\{?"ok"\s*:\s*(true|false)/,
-  /^\s*HTTP\/[12]/,
-];
-
-/** Strip ANSI escape sequences from a line. */
-function stripAnsi(line: string): string {
-  return line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
-}
-
-function isNoiseLine(line: string): boolean {
-  return NOISE_PATTERNS.some((p) => p.test(line));
-}
-
-/**
- * Braille spinner characters (U+2800 block) used by CLI spinners.
- * Replace any leading spinner char with a canonical placeholder so
- * consecutive spinner lines collapse into one.
- */
-const SPINNER_RE = /^[\u2800-\u28FF]\s*/;
-
-/** Collapse consecutive lines that differ only by spinner character. */
-function dedupeSpinnerLines(lines: string[]): string[] {
-  const out: string[] = [];
-  let prevNorm = "";
-  for (const line of lines) {
-    const norm = line.replace(SPINNER_RE, "");
-    if (SPINNER_RE.test(line) && norm === prevNorm) continue;
-    prevNorm = SPINNER_RE.test(line) ? norm : "";
-    out.push(line);
-  }
-  return out;
-}
 
 function logPath(session: string): string {
   // Sanitise session name for filesystem safety
@@ -97,7 +42,7 @@ async function ensurePipe(session: string): Promise<void> {
   }
 }
 
-/** Read the last N lines from a session's log file, filtering noise. */
+/** Read the last N lines from a session's log file. */
 async function tailLog(
   session: string,
   lines: number,
@@ -109,15 +54,10 @@ async function tailLog(
   if (stat.size === 0) return null;
 
   try {
-    // Read more raw lines than requested so we still have enough after filtering
-    const result = await exec("tail", ["-n", String(lines * 3), path], {
+    const result = await exec("tail", ["-n", String(lines), path], {
       timeoutMs: 3_000,
     });
-    const filtered = result.stdout
-      .split("\n")
-      .map(stripAnsi)
-      .filter((l) => !isNoiseLine(l));
-    return dedupeSpinnerLines(filtered).slice(-lines).join("\n");
+    return result.stdout;
   } catch {
     return null;
   }
@@ -145,19 +85,14 @@ export async function getSessionOutput(
       ["capture-pane", "-t", session, "-p", "-S", `-${lines}`],
       { timeoutMs: 5_000 },
     );
-    const filtered = result.stdout
-      .split("\n")
-      .map(stripAnsi)
-      .filter((l) => !isNoiseLine(l));
-    return dedupeSpinnerLines(filtered).join("\n").trimEnd();
+    return result.stdout.trimEnd();
   } catch {
     return "(session not available)";
   }
 }
 
 /**
- * Get terminal output for a session, with noise filtering and line grouping
- * suitable for the mayor chat view.
+ * Get terminal output for a session as an array of non-empty lines.
  */
 export async function getSessionLines(
   session: string,
@@ -177,12 +112,7 @@ export async function getSessionLines(
       ["capture-pane", "-t", session, "-p", "-S", `-${lines}`],
       { timeoutMs: 5_000 },
     );
-    return dedupeSpinnerLines(
-      result.stdout
-        .split("\n")
-        .map(stripAnsi)
-        .filter((l) => l.trim() && !isNoiseLine(l)),
-    );
+    return result.stdout.split("\n").filter((l) => l.trim());
   } catch {
     return [];
   }

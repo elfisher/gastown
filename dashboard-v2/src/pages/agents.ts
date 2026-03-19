@@ -37,7 +37,7 @@ function renderAgentCard(agent: Agent): string {
   const icon = ROLE_ICONS[agent.role] ?? "❓";
   const badge = STATUS_BADGE[agent.status] ?? "badge-ghost";
   const preview = agent.preview
-    ? `<pre class="text-xs opacity-70 mt-2 whitespace-pre-wrap max-h-24 overflow-hidden">${escapeHtml(agent.preview)}</pre>`
+    ? `<div class="mt-2 h-24 overflow-hidden rounded" data-readonly-term="/api/terminal/${encodeURIComponent(agent.session)}/raw"></div>`
     : "";
 
   return `<a href="/agent/${encodeURIComponent(agent.session)}" class="card bg-base-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer no-underline">
@@ -95,14 +95,38 @@ export function renderAgentsPage(agents: Agent[]): string {
          hx-swap="innerHTML">
       ${renderAgentCards(agents)}
     </div>
+    <link rel="stylesheet" href="/vendor/xterm/xterm/css/xterm.css">
+    <script type="module">
+      import { readonly } from '/static/terminal.js';
+      const activeTerminals = [];
+      function initTerminals(root) {
+        root.querySelectorAll('[data-readonly-term]').forEach(el => {
+          const handle = readonly(el.dataset.readonlyTerm, el, 5000);
+          if (handle) activeTerminals.push(handle);
+        });
+      }
+      function cleanupTerminals() {
+        while (activeTerminals.length) {
+          const h = activeTerminals.pop();
+          if (h && h.stop) h.stop();
+        }
+      }
+      initTerminals(document);
+      document.body.addEventListener('htmx:beforeSwap', (e) => {
+        if (e.detail.elt.id === 'agents-grid') cleanupTerminals();
+      });
+      document.body.addEventListener('htmx:afterSwap', (e) => {
+        if (e.detail.elt.id === 'agents-grid') initTerminals(e.detail.elt);
+      });
+    </script>
   </div>`;
 }
 
 export function renderAgentOutput(output: string): string {
-  return `<pre class="text-sm whitespace-pre-wrap font-mono bg-base-300 p-4 rounded-box overflow-auto max-h-[60vh]">${escapeHtml(output)}</pre>`;
+  return `<div class="bg-base-300 rounded-box overflow-hidden" style="height:40vh" data-readonly-term-inline></div>`;
 }
 
-export function renderAgentDetailPage(agent: Agent, output: string, workHistory: AgentWorkHistoryEntry[] = []): string {
+export function renderAgentDetailPage(agent: Agent, workHistory: AgentWorkHistoryEntry[] = []): string {
   const icon = ROLE_ICONS[agent.role] ?? "❓";
   const badge = STATUS_BADGE[agent.status] ?? "badge-ghost";
 
@@ -168,13 +192,16 @@ export function renderAgentDetailPage(agent: Agent, output: string, workHistory:
 
     <div class="mb-2 flex items-center gap-2">
       <h2 class="text-lg font-semibold">Live Output</h2>
-      <span class="badge badge-sm badge-ghost">htmx polling</span>
+      <span class="badge badge-sm badge-ghost">xterm.js</span>
     </div>
-    <div id="agent-output"
-         hx-get="/api/agents/${encodeURIComponent(agent.session)}/output"
-         hx-trigger="every 3s"
-         hx-swap="innerHTML">
-      ${renderAgentOutput(output)}
-    </div>
+    <div id="agent-output" class="bg-base-300 rounded-box overflow-hidden" style="height:60vh"
+         data-readonly-term="/api/terminal/${encodeURIComponent(agent.session)}/raw"></div>
+    <link rel="stylesheet" href="/vendor/xterm/xterm/css/xterm.css">
+    <script type="module">
+      import { readonly } from '/static/terminal.js';
+      document.querySelectorAll('[data-readonly-term]').forEach(el => {
+        readonly(el.dataset.readonlyTerm, el, 3000);
+      });
+    </script>
   </div>`;
 }

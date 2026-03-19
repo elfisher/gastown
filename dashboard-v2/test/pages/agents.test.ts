@@ -63,10 +63,11 @@ describe("renderAgentCards", () => {
     expect(html).toContain('href="/agent/gt-furiosa"');
   });
 
-  it("renders preview text when present", () => {
+  it("renders preview terminal container when present", () => {
     const agent = makeAgent({ preview: "Building feature X..." });
     const html = renderAgentCards([agent]);
-    expect(html).toContain("Building feature X...");
+    expect(html).toContain("data-readonly-term");
+    expect(html).toContain("/api/terminal/gt-furiosa/raw");
   });
 
   it("renders current work badge when present", () => {
@@ -94,16 +95,16 @@ describe("renderAgentCards", () => {
 describe("renderAgentDetailPage", () => {
   it("renders agent detail with live output section", () => {
     const agent = makeAgent();
-    const html = renderAgentDetailPage(agent, "some output");
+    const html = renderAgentDetailPage(agent);
     expect(html).toContain("furiosa");
     expect(html).toContain("Live Output");
-    expect(html).toContain("some output");
-    expect(html).toContain("/api/agents/gt-furiosa/output");
+    expect(html).toContain("data-readonly-term");
+    expect(html).toContain("/api/terminal/gt-furiosa/raw");
   });
 
   it("renders session info and stats", () => {
     const agent = makeAgent();
-    const html = renderAgentDetailPage(agent, "");
+    const html = renderAgentDetailPage(agent);
     expect(html).toContain("gt-furiosa");
     expect(html).toContain("Started");
     expect(html).toContain("Last Activity");
@@ -111,7 +112,7 @@ describe("renderAgentDetailPage", () => {
   });
 
   it("contains no input/textarea/button/form elements", () => {
-    const html = renderAgentDetailPage(makeAgent(), "output");
+    const html = renderAgentDetailPage(makeAgent());
     expect(html).not.toMatch(/<input[\s>]/);
     expect(html).not.toMatch(/<textarea[\s>]/);
     expect(html).not.toMatch(/<button[\s>]/);
@@ -120,15 +121,14 @@ describe("renderAgentDetailPage", () => {
 });
 
 describe("renderAgentOutput", () => {
-  it("renders output in pre tag", () => {
+  it("renders xterm.js container", () => {
     const html = renderAgentOutput("hello world");
-    expect(html).toContain("<pre");
-    expect(html).toContain("hello world");
+    expect(html).toContain("data-readonly-term-inline");
   });
 
-  it("escapes HTML in output", () => {
+  it("does not include raw output text (xterm.js fetches it client-side)", () => {
     const html = renderAgentOutput("<script>alert(1)</script>");
     expect(html).not.toContain("<script>alert(1)</script>");
-    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain("&lt;script&gt;");
   });
 });

@@ -15,6 +15,7 @@ import (
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/events"
 	"github.com/steveyegge/gastown/internal/git"
+	"github.com/steveyegge/gastown/internal/harness"
 	"github.com/steveyegge/gastown/internal/mail"
 	"github.com/steveyegge/gastown/internal/polecat"
 	"github.com/steveyegge/gastown/internal/rig"
@@ -490,6 +491,21 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 			} else if contam.Behind >= warnThreshold {
 				style.PrintWarning("branch is %d commits behind %s — consider rebasing to avoid PR contamination", contam.Behind, originDefault)
 			}
+		}
+
+		// Verification contracts (gt-6vm): run harness before submitting to merge queue.
+		// LoadHarness reads layered config (bead-specific → repo → rig defaults).
+		// If a harness is configured and any tier fails, refuse to submit.
+		rigPath := filepath.Join(townRoot, rigName)
+		h := harness.LoadHarness(rigPath, cwd, issueID)
+		if h != nil {
+			fmt.Printf("%s Running verification harness...\n", style.Bold.Render("→"))
+			report := harness.RunHarness(cwd, h)
+			fmt.Print(harness.FormatReport(report))
+			if !report.Passed {
+				return fmt.Errorf("verification harness failed — fix the errors above and retry gt done")
+			}
+			fmt.Printf("%s Verification harness passed\n", style.Bold.Render("✓"))
 		}
 
 		// Determine merge strategy from convoy (gt-myofa.3)

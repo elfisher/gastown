@@ -438,7 +438,11 @@ func (c *RigConfigSyncCheck) doltDatabaseExists(ctx *CheckContext, dbName string
 	// Use the doltserver package to list databases
 	databases, err := doltserver.ListDatabases(ctx.TownRoot)
 	if err != nil {
-		return false
+		// If we can't reach the server, assume the database exists.
+		// Returning false here would cause --fix to run bd init --force,
+		// which destroys all beads data. A transient connection failure
+		// must never trigger a destructive reinit.
+		return true
 	}
 
 	for _, db := range databases {

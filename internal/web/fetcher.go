@@ -706,6 +706,99 @@ func determineColorClass(ciStatus, mergeable string) string {
 	return "mq-yellow"
 }
 
+// FetchPipeline fetches internal merge queue MRs with their processing phase.
+// This shows what the refinery is actively working on, unlike FetchMergeQueue
+// which shows GitHub PRs.
+func (f *LiveConvoyFetcher) FetchPipeline() ([]PipelineRow, error) {
+	// Load registered rigs
+	rigsConfigPath := filepath.Join(f.townRoot, "mayor", "rigs.json")
+	rigsConfig, err := config.LoadRigsConfig(rigsConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("loading rigs config: %w", err)
+	}
+
+	var result []PipelineRow
+
+	for rigName := range rigsConfig.Rigs {
+		rigBeadsDir := filepath.Join(f.townRoot, rigName)
+
+		// Query open MR beads for this rig
+		stdout, err := f.runBdCmd(rigBeadsDir, "list", "--label=gt:merge-request", "--status=open", "--json", "--limit=20")
+		if err != nil {
+			continue // Rig may not have beads or MRs
+		}
+
+		var mrs []struct {
+			ID          string `json:"id"`
+			Title       string `json:"title"`
+			Status      string `json:"status"`
+			Description string `json:"description"`
+			CreatedAt   string `json:"created_at"`
+			UpdatedAt   string `json:"updated_at"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &mrs); err != nil {
+			continue
+		}
+
+		total := len(mrs)
+		for i, mr := range mrs {
+			row := PipelineRow{
+				ID:       mr.ID,
+				Rig:      rigName,
+				Position: i + 1,
+				Total:    total,
+			}
+
+			// Parse MR fields from description
+			row.Branch, row.Target, row.Worker = parseMRDescriptionFields(mr.Description)
+
+			// Derive phase from status
+			switch mr.Status {
+			case "in_progress":
+				row.Phase = "preparing"
+			default:
+				row.Phase = "ready"
+			}
+
+			// Calculate age
+			if mr.CreatedAt != "" {
+				if t, err := time.Parse(time.RFC3339, mr.CreatedAt); err == nil {
+					row.Age = formatTimestamp(t)
+				}
+			}
+
+			result = append(result, row)
+		}
+	}
+
+	return result, nil
+}
+
+// parseMRDescriptionFields extracts branch, target, and worker from MR description.
+func parseMRDescriptionFields(desc string) (branch, target, worker string) {
+	for _, line := range strings.Split(desc, "\n") {
+		line = strings.TrimSpace(line)
+		colonIdx := strings.Index(line, ":")
+		if colonIdx == -1 {
+			continue
+		}
+		key := strings.TrimSpace(strings.ToLower(line[:colonIdx]))
+		value := strings.TrimSpace(line[colonIdx+1:])
+		if value == "" {
+			continue
+		}
+		switch key {
+		case "branch":
+			branch = value
+		case "target":
+			target = value
+		case "worker":
+			worker = value
+		}
+	}
+	return
+}
+
 // FetchWorkers fetches all running worker sessions (polecats and refinery) with activity data.
 func (f *LiveConvoyFetcher) FetchWorkers() ([]WorkerRow, error) {
 	// Load registered rigs to filter sessions
@@ -815,6 +908,7 @@ func (f *LiveConvoyFetcher) FetchWorkers() ([]WorkerRow, error) {
 			IssueTitle:   issueTitle,
 			WorkStatus:   workStatus,
 			AgentType:    agentType,
+			TargetBranch: detectWorktreeTargetBranch(filepath.Join(f.townRoot, rig, "polecats", workerName, rig)),
 		})
 	}
 
@@ -1119,6 +1213,9 @@ func (f *LiveConvoyFetcher) FetchRigs() ([]RigRow, error) {
 			row.HasRefinery = true
 		}
 
+		// Detect target branch from active polecat worktrees
+		row.TargetBranch = detectRigTargetBranch(rigPath)
+
 		rows = append(rows, row)
 	}
 
@@ -1128,6 +1225,71 @@ func (f *LiveConvoyFetcher) FetchRigs() ([]RigRow, error) {
 	})
 
 	return rows, nil
+}
+
+// detectRigTargetBranch checks active polecat worktrees to find the dominant
+// target branch for a rig. Returns the branch name (e.g., "dashboard-v2") or
+// empty string if no active polecats or all target "main".
+func detectRigTargetBranch(rigPath string) string {
+	polecatsDir := filepath.Join(rigPath, "polecats")
+	entries, err := os.ReadDir(polecatsDir)
+	if err != nil {
+		return ""
+	}
+
+	branchCounts := make(map[string]int)
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		worktree := filepath.Join(polecatsDir, e.Name(), filepath.Base(rigPath))
+		branch := detectWorktreeTargetBranch(worktree)
+		if branch != "" {
+			branchCounts[branch]++
+		}
+	}
+
+	if len(branchCounts) == 0 {
+		return ""
+	}
+
+	// Return the most common non-main branch, or "main" if that's all there is
+	best := ""
+	bestCount := 0
+	for b, c := range branchCounts {
+		if c > bestCount || (c == bestCount && b != "main") {
+			best = b
+			bestCount = c
+		}
+	}
+	return best
+}
+
+// detectWorktreeTargetBranch reads the upstream tracking branch for a git worktree.
+// Returns the branch name (e.g., "dashboard-v2") or empty string.
+func detectWorktreeTargetBranch(worktreePath string) string {
+	// Quick check: does this look like a worktree?
+	gitFile := filepath.Join(worktreePath, ".git")
+	if _, err := os.Stat(gitFile); err != nil {
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "-C", worktreePath, "rev-parse", "--abbrev-ref", "@{upstream}")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	upstream := strings.TrimSpace(string(out))
+	// Strip "origin/" prefix
+	upstream = strings.TrimPrefix(upstream, "origin/")
+	if upstream == "" || upstream == "HEAD" {
+		return ""
+	}
+	return upstream
 }
 
 // FetchDogs returns all dogs in the kennel with their state.
@@ -1566,25 +1728,22 @@ func runtimeLabelFromConfig(command string, args []string, fallback string) stri
 func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 	// Query both open AND hooked issues for the Work panel
 	// Open = ready to assign, Hooked = in progress
-	var allBeads []struct {
+	type issueBead struct {
 		ID        string   `json:"id"`
 		Title     string   `json:"title"`
 		Type      string   `json:"type"`
+		Status    string   `json:"status"`
 		Priority  int      `json:"priority"`
 		Labels    []string `json:"labels"`
 		CreatedAt string   `json:"created_at"`
+		CreatedBy string   `json:"created_by"`
 	}
+
+	var allBeads []issueBead
 
 	// Fetch open issues
 	if stdout, err := f.runBdCmd(f.townRoot, "list", "--status=open", "--json", "--limit=50"); err == nil {
-		var openBeads []struct {
-			ID        string   `json:"id"`
-			Title     string   `json:"title"`
-			Type      string   `json:"type"`
-			Priority  int      `json:"priority"`
-			Labels    []string `json:"labels"`
-			CreatedAt string   `json:"created_at"`
-		}
+		var openBeads []issueBead
 		if err := json.Unmarshal(stdout.Bytes(), &openBeads); err == nil {
 			allBeads = append(allBeads, openBeads...)
 		}
@@ -1592,14 +1751,7 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 
 	// Fetch hooked issues (in progress)
 	if stdout, err := f.runBdCmd(f.townRoot, "list", "--status=hooked", "--json", "--limit=50"); err == nil {
-		var hookedBeads []struct {
-			ID        string   `json:"id"`
-			Title     string   `json:"title"`
-			Type      string   `json:"type"`
-			Priority  int      `json:"priority"`
-			Labels    []string `json:"labels"`
-			CreatedAt string   `json:"created_at"`
-		}
+		var hookedBeads []issueBead
 		if err := json.Unmarshal(stdout.Bytes(), &hookedBeads); err == nil {
 			allBeads = append(allBeads, hookedBeads...)
 		}
@@ -1630,7 +1782,9 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 			ID:       bead.ID,
 			Title:    bead.Title,
 			Type:     bead.Type,
+			Status:   bead.Status,
 			Priority: bead.Priority,
+			Origin:   classifyIssueOrigin(bead.CreatedBy),
 		}
 
 		// Keep full title - CSS handles overflow
@@ -1675,6 +1829,103 @@ func (f *LiveConvoyFetcher) FetchIssues() ([]IssueRow, error) {
 	})
 
 	return rows, nil
+}
+
+// scoreboardBead is the JSON shape returned by bd list for scoreboard queries.
+type scoreboardBead struct {
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	Type      string   `json:"type"`
+	Status    string   `json:"status"`
+	Labels    []string `json:"labels"`
+}
+
+// isScoreboardInternal returns true if the bead is an internal type that should
+// be excluded from the scoreboard.
+func isScoreboardInternal(b scoreboardBead) bool {
+	switch b.Type {
+	case "message", "convoy", "queue", "merge-request", "wisp", "agent":
+		return true
+	}
+	for _, l := range b.Labels {
+		switch l {
+		case "gt:message", "gt:convoy", "gt:queue", "gt:merge-request", "gt:wisp", "gt:agent":
+			return true
+		}
+	}
+	return false
+}
+
+// FetchScoreboard returns project progress grouped by status (done/in-progress/open).
+func (f *LiveConvoyFetcher) FetchScoreboard() (*ScoreboardData, error) {
+	sb := &ScoreboardData{}
+
+	fetch := func(status string) []scoreboardBead {
+		stdout, err := f.runBdCmd(f.townRoot, "list", "--status="+status, "--json", "--limit=100")
+		if err != nil {
+			return nil
+		}
+		var beads []scoreboardBead
+		if err := json.Unmarshal(stdout.Bytes(), &beads); err != nil {
+			return nil
+		}
+		return beads
+	}
+
+	for _, b := range fetch("closed") {
+		if isScoreboardInternal(b) {
+			continue
+		}
+		sb.Done = append(sb.Done, ScoreboardItem{ID: b.ID, Title: b.Title})
+	}
+	for _, b := range fetch("hooked") {
+		if isScoreboardInternal(b) {
+			continue
+		}
+		sb.InProgress = append(sb.InProgress, ScoreboardItem{ID: b.ID, Title: b.Title})
+	}
+	for _, b := range fetch("in_progress") {
+		if isScoreboardInternal(b) {
+			continue
+		}
+		sb.InProgress = append(sb.InProgress, ScoreboardItem{ID: b.ID, Title: b.Title})
+	}
+	for _, b := range fetch("open") {
+		if isScoreboardInternal(b) {
+			continue
+		}
+		sb.Open = append(sb.Open, ScoreboardItem{ID: b.ID, Title: b.Title})
+	}
+
+	sb.DoneCount = len(sb.Done)
+	sb.InProgCount = len(sb.InProgress)
+	sb.OpenCount = len(sb.Open)
+	sb.Total = sb.DoneCount + sb.InProgCount + sb.OpenCount
+	if sb.Total > 0 {
+		sb.DonePct = sb.DoneCount * 100 / sb.Total
+		sb.InProgPct = sb.InProgCount * 100 / sb.Total
+	}
+
+	return sb, nil
+}
+
+// classifyIssueOrigin returns "agent" if created_by looks like an agent path,
+// "human" otherwise.
+func classifyIssueOrigin(createdBy string) string {
+	if createdBy == "" {
+		return "human"
+	}
+	// Agent paths contain "/" (e.g., "gastown/refinery", "gastown/polecats/furiosa")
+	// or are known agent role names
+	if strings.Contains(createdBy, "/") {
+		return "agent"
+	}
+	switch createdBy {
+	case "mayor", "deacon", "witness", "refinery":
+		return "agent"
+	}
+	return "human"
+
 }
 
 // FetchActivity returns recent activity from the event log.
@@ -1854,4 +2105,80 @@ func eventSummary(eventType, actor string, payload map[string]interface{}) strin
 	default:
 		return eventType
 	}
+}
+
+// digestWindow is the lookback period for the overnight digest.
+const digestWindow = 8 * time.Hour
+
+// digestMinEvents is the minimum number of events to show a digest.
+const digestMinEvents = 3
+
+// FetchDigest scans the events log for the last 8 hours and produces
+// an overnight activity summary.
+func (f *LiveConvoyFetcher) FetchDigest() (*DigestData, error) {
+	eventsPath := filepath.Join(f.townRoot, ".events.jsonl")
+
+	data, err := os.ReadFile(eventsPath)
+	if err != nil {
+		return nil, nil
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) == 0 {
+		return nil, nil
+	}
+
+	cutoff := time.Now().UTC().Add(-digestWindow)
+	d := &DigestData{Period: "last 8 hours"}
+
+	// Scan from the end for efficiency — stop when we pass the cutoff.
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if line == "" {
+			continue
+		}
+
+		var event struct {
+			Timestamp  string `json:"ts"`
+			Type       string `json:"type"`
+			Visibility string `json:"visibility"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+		if event.Visibility == "audit" {
+			continue
+		}
+
+		t, err := time.Parse(time.RFC3339, event.Timestamp)
+		if err != nil {
+			continue
+		}
+		if t.Before(cutoff) {
+			break
+		}
+
+		d.TotalEvents++
+		switch event.Type {
+		case "merged":
+			d.MergesLanded++
+		case "merge_failed":
+			d.MergeFails++
+		case "done":
+			d.WorkDone++
+		case "spawn":
+			d.Spawns++
+		case "session_death", "mass_death":
+			d.Deaths++
+		case "escalation_sent":
+			d.Escalations++
+		case "mail":
+			d.MailSent++
+		case "sling":
+			d.Slings++
+		}
+	}
+
+	d.Available = d.TotalEvents >= digestMinEvents
+	return d, nil
 }

@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { listRigs } from "./data/rigs.js";
-import { getMayorMessages } from "./data/mayor.js";
 import { getPipelineData } from "./data/pipeline.js";
 import { listAgents, getAgentPreview, getAgentOutput } from "./data/agents.js";
 import { listConvoys } from "./data/convoys.js";
@@ -85,10 +84,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/mayor", async (_req, reply) => {
-    const messages = await getMayorMessages();
     const html = await withLayout(
       "Mayor",
-      renderMayorPage(messages),
+      renderMayorPage(),
       "/mayor"
     );
     return reply.type("text/html").send(html);

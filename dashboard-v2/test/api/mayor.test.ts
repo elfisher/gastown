@@ -15,9 +15,8 @@ vi.mock("../../src/config.js", () => ({
 }));
 
 import { buildApp } from "../../src/server.js";
-import { getMayorMessages, nudgeMayor } from "../../src/data/mayor.js";
+import { nudgeMayor } from "../../src/data/mayor.js";
 
-const mockGetMessages = vi.mocked(getMayorMessages);
 const mockNudge = vi.mocked(nudgeMayor);
 
 describe("Mayor API", () => {
@@ -25,27 +24,13 @@ describe("Mayor API", () => {
     vi.clearAllMocks();
   });
 
-  it("GET /mayor returns 200 with chat UI", async () => {
-    mockGetMessages.mockResolvedValueOnce([]);
+  it("GET /mayor returns 200 with xterm terminal", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/mayor" });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
-    expect(res.body).toContain("mayor-messages");
-    expect(res.body).not.toContain('name="message"');
-    await app.close();
-  });
-
-  it("GET /api/mayor/messages returns HTML fragment", async () => {
-    mockGetMessages.mockResolvedValueOnce([
-      { sender: "mayor", text: "Hello", timestamp: "2026-03-16T12:00:00Z" },
-    ]);
-    const app = await buildApp();
-    const res = await app.inject({ method: "GET", url: "/api/mayor/messages" });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers["content-type"]).toContain("text/html");
-    expect(res.body).toContain("Hello");
-    expect(res.body).toContain("chat-start");
+    expect(res.body).toContain('id="terminal"');
+    expect(res.body).toContain("/ws/terminal/hq-mayor");
     await app.close();
   });
 

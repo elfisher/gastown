@@ -17,6 +17,13 @@ export async function buildApp() {
     prefix: "/static/",
   });
 
+  // Serve xterm.js vendor assets from node_modules
+  await app.register(fastifyStatic, {
+    root: join(__dirname, "..", "node_modules", "@xterm"),
+    prefix: "/vendor/xterm/",
+    decorateReply: false,
+  });
+
   await registerRoutes(app);
 
   return app;

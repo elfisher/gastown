@@ -1,13 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { getMayorMessages, nudgeMayor, addSentMessage } from "../data/mayor.js";
-import { renderMessages } from "../pages/mayor.js";
+import { nudgeMayor, addSentMessage } from "../data/mayor.js";
 
 export async function registerMayorApi(app: FastifyInstance): Promise<void> {
-  app.get("/api/mayor/messages", async (_req, reply) => {
-    const messages = await getMayorMessages();
-    return reply.type("text/html").send(renderMessages(messages));
-  });
-
   app.post<{ Body: { message?: string } }>(
     "/api/mayor/nudge",
     async (req, reply) => {

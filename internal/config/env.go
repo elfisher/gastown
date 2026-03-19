@@ -99,6 +99,10 @@ func AgentEnv(cfg AgentEnvConfig) map[string]string {
 		env["GT_RIG"] = cfg.Rig
 		env["BD_ACTOR"] = fmt.Sprintf("%s/refinery", cfg.Rig)
 		env["GIT_AUTHOR_NAME"] = fmt.Sprintf("%s/refinery", cfg.Rig)
+		// Prevent git rebase from opening vim — Kiro and other LLM agents
+		// can't interact with interactive editors. Use true to accept
+		// default commit messages during rebase.
+		env["GIT_EDITOR"] = "true"
 
 	case constants.RolePolecat:
 		env["GT_ROLE"] = fmt.Sprintf("%s/polecats/%s", cfg.Rig, cfg.AgentName)

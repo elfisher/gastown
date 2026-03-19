@@ -17,6 +17,7 @@ import { renderAgentsPage, renderAgentDetailPage } from "./pages/agents.js";
 import { renderTourPage } from "./pages/tour.js";
 import { registerAgentsApi } from "./api/agents.js";
 import { registerProjectsApi } from "./api/projects.js";
+import { registerTerminalWs, registerTerminalApi } from "./api/terminal.js";
 import { getProjectsData } from "./data/projects.js";
 import { renderProjectsPage } from "./pages/projects.js";
 import type { Rig } from "./data/schemas.js";
@@ -192,4 +193,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerPipelineApi(app);
   await registerAgentsApi(app);
   await registerProjectsApi(app);
+  await registerTerminalApi(app);
+  await registerTerminalWs(app);
 }

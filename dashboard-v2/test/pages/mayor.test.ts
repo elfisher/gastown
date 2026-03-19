@@ -7,16 +7,14 @@ describe("renderMayorPage", () => {
     const html = renderMayorPage([]);
     expect(html).toContain("mayor-messages");
     expect(html).toContain("/api/mayor/messages");
-    expect(html).toContain("/api/mayor/nudge");
-    expect(html).toContain('type="text"');
-    expect(html).toContain("Send");
+    expect(html).not.toContain("/api/mayor/nudge");
+    expect(html).not.toContain('name="message"');
   });
 
-  it("contains input box (only input in dashboard)", () => {
+  it("does not contain input box (terminal-only like other agent pages)", () => {
     const html = renderMayorPage([]);
-    expect(html).toContain('name="message"');
-    expect(html).toContain("input");
-    expect(html).toContain("btn btn-primary");
+    expect(html).not.toContain('name="message"');
+    expect(html).not.toContain("btn btn-primary");
   });
 });
 

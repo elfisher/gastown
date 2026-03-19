@@ -32,7 +32,7 @@ describe("Mayor API", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
     expect(res.body).toContain("mayor-messages");
-    expect(res.body).toContain('name="message"');
+    expect(res.body).not.toContain('name="message"');
     await app.close();
   });
 

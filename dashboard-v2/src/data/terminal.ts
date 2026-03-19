@@ -44,9 +44,24 @@ const NOISE_PATTERNS = [
   /^\s*HTTP\/[12]/,
 ];
 
+/** Braille spinner characters used by CLI spinners. */
+const SPINNER_CHARS = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/g;
+
 /** Strip ANSI escape sequences from a line. */
 function stripAnsi(line: string): string {
   return line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+}
+
+/** Collapse consecutive lines that differ only by spinner character. */
+function dedupeSpinnerLines(lines: string[]): string[] {
+  const result: string[] = [];
+  for (const line of lines) {
+    const normalized = line.replace(SPINNER_CHARS, "");
+    const prev = result[result.length - 1];
+    if (prev !== undefined && prev.replace(SPINNER_CHARS, "") === normalized) continue;
+    result.push(line);
+  }
+  return result;
 }
 
 function isNoiseLine(line: string): boolean {
@@ -93,10 +108,12 @@ async function tailLog(
     const result = await exec("tail", ["-n", String(lines * 3), path], {
       timeoutMs: 3_000,
     });
-    const filtered = result.stdout
-      .split("\n")
-      .map(stripAnsi)
-      .filter((l) => !isNoiseLine(l));
+    const filtered = dedupeSpinnerLines(
+      result.stdout
+        .split("\n")
+        .map(stripAnsi)
+        .filter((l) => !isNoiseLine(l)),
+    );
     return filtered.slice(-lines).join("\n");
   } catch {
     return null;
@@ -125,7 +142,9 @@ export async function getSessionOutput(
       ["capture-pane", "-t", session, "-p", "-S", `-${lines}`],
       { timeoutMs: 5_000 },
     );
-    return result.stdout.trimEnd();
+    return dedupeSpinnerLines(
+      result.stdout.trimEnd().split("\n").map(stripAnsi),
+    ).join("\n");
   } catch {
     return "(session not available)";
   }
@@ -153,10 +172,12 @@ export async function getSessionLines(
       ["capture-pane", "-t", session, "-p", "-S", `-${lines}`],
       { timeoutMs: 5_000 },
     );
-    return result.stdout
-      .split("\n")
-      .map(stripAnsi)
-      .filter((l) => l.trim() && !isNoiseLine(l));
+    return dedupeSpinnerLines(
+      result.stdout
+        .split("\n")
+        .map(stripAnsi)
+        .filter((l) => l.trim() && !isNoiseLine(l)),
+    );
   } catch {
     return [];
   }

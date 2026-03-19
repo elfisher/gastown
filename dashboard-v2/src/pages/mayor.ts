@@ -69,30 +69,7 @@ export function renderMayorPage(messages: MayorMessage[]): string {
       </div>
     </div>
 
-    <form class="mt-4 flex gap-2"
-          hx-post="/api/mayor/nudge"
-          hx-swap="none"
-          hx-on::after-request="if(event.detail.successful){this.reset();htmx.trigger(document.body,'refresh-messages')}"
-          hx-indicator="#send-btn">
-      <input type="text" name="message"
-             placeholder="Send a message to the Mayor..."
-             class="input input-bordered flex-1"
-             required
-             autocomplete="off" />
-      <button id="send-btn" type="submit" class="btn btn-primary">
-        <span class="htmx-indicator loading loading-spinner loading-xs"></span>
-        Send
-      </button>
-    </form>
-
     <script>
-      document.body.addEventListener("mayor-sent", function() {
-        var t = document.getElementById("sent-toast");
-        if (t) {
-          t.classList.remove("hidden");
-          setTimeout(function() { t.classList.add("hidden"); }, 2000);
-        }
-      });
       // Auto-scroll on htmx content swap
       document.body.addEventListener("htmx:afterSettle", function(e) {
         var el = document.getElementById("mayor-messages");

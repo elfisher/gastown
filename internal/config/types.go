@@ -651,6 +651,20 @@ type RigSettings struct {
 	// Takes precedence over RoleAgents["crew"] but is overridden by explicit --agent flags.
 	// Example: {"denali": "codex", "glacier": "gemini"}
 	WorkerAgents map[string]string `json:"worker_agents,omitempty"`
+
+	// HarnessDefaults provides default verification commands for all beads in this rig.
+	// Bead-specific harnesses extend (not replace) these defaults.
+	// See docs/bounded-yolo/VERIFICATION-CONTRACTS.md for design details.
+	HarnessDefaults *HarnessDefaults `json:"harness_defaults,omitempty"`
+}
+
+// HarnessDefaults holds default verification commands applied to all beads in a rig.
+// Tier0 commands are hard-block build/test gates. Tier1 commands are quality gates.
+type HarnessDefaults struct {
+	// Tier0 contains must-pass build and test commands (e.g., "go build ./...", "go test ./...").
+	Tier0 []string `json:"tier0,omitempty" yaml:"tier0,omitempty"`
+	// Tier1 contains quality gate commands (e.g., lint, typecheck).
+	Tier1 []string `json:"tier1,omitempty" yaml:"tier1,omitempty"`
 }
 
 // CrewConfig represents crew workspace settings for a rig.

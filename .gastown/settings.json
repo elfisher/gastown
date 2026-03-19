@@ -1,0 +1,8 @@
+{
+  "type": "rig-settings",
+  "version": 1,
+  "harness_defaults": {
+    "tier0": ["go build ./...", "go test ./..."],
+    "tier1": ["cd dashboard-v2 && npx tsc --noEmit"]
+  }
+}

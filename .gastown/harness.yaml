@@ -1,0 +1,8 @@
+# Verification harness for the gastown repository.
+# tier0: must-pass build and test gates.
+# tier1: quality gates (typecheck, lint).
+tier0:
+  - go build ./...
+  - go test ./...
+tier1:
+  - cd dashboard-v2 && npx tsc --noEmit

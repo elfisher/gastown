@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/steveyegge/gastown/internal/beads"
 	gitpkg "github.com/steveyegge/gastown/internal/git"
+	"github.com/steveyegge/gastown/internal/harness"
 )
 
 // TestDoneUsesResolveBeadsDir verifies that the done command correctly uses
@@ -1346,5 +1348,49 @@ func testRunGit(t *testing.T, dir string, args ...string) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+	}
+}
+
+// TestDoneHarnessBlocksOnFailure verifies that when the verification harness
+// has commands and one fails, gt done refuses to submit (gt-1k9).
+func TestDoneHarnessBlocksOnFailure(t *testing.T) {
+	h := harness.RunTiered(context.Background(), t.TempDir(), [][]string{
+		{"true"},          // tier0 passes
+		{"false"},         // tier1 fails (exit 1)
+	})
+	if h.Success {
+		t.Fatal("expected harness to fail when a command returns non-zero")
+	}
+	if h.FailedAt < 0 {
+		t.Fatal("expected FailedAt >= 0")
+	}
+	failed := h.Results[h.FailedAt]
+	if failed.ExitCode == 0 {
+		t.Errorf("expected non-zero exit code, got 0")
+	}
+}
+
+// TestDoneHarnessPassesAllowsSubmit verifies that when all harness commands
+// pass, the result is success and gt done would proceed (gt-1k9).
+func TestDoneHarnessPassesAllowsSubmit(t *testing.T) {
+	h := harness.RunTiered(context.Background(), t.TempDir(), [][]string{
+		{"true"},          // tier0 passes
+		{"echo ok"},       // tier1 passes
+	})
+	if !h.Success {
+		t.Fatalf("expected harness to pass, got failure at %d: %s", h.FailedAt, h.Summary())
+	}
+}
+
+// TestDoneHarnessEmptySkips verifies that when no harness commands are
+// configured, the harness step is a no-op (gt-1k9).
+func TestDoneHarnessEmptySkips(t *testing.T) {
+	dir := t.TempDir()
+	h, err := harness.LoadHarness(dir, "gt-abc", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Tier0) > 0 || len(h.Tier1) > 0 {
+		t.Errorf("expected empty tiers with no config, got tier0=%v tier1=%v", h.Tier0, h.Tier1)
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/events"
 	"github.com/steveyegge/gastown/internal/git"
+	"github.com/steveyegge/gastown/internal/harness"
 	"github.com/steveyegge/gastown/internal/mail"
 	"github.com/steveyegge/gastown/internal/polecat"
 	"github.com/steveyegge/gastown/internal/rig"
@@ -490,6 +491,47 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 					contam.Behind, originDefault, blockThreshold, defaultBranch)
 			} else if contam.Behind >= warnThreshold {
 				style.PrintWarning("branch is %d commits behind %s — consider rebasing to avoid PR contamination", contam.Behind, originDefault)
+			}
+		}
+
+		// Verification harness: run pre-submit checks before pushing (gt-1k9).
+		// Loads layered harness config (bead-specific > repo-level > rig defaults)
+		// and runs tiered commands. If any tier fails, refuse to submit.
+		{
+			rigPath := filepath.Join(townRoot, rigName)
+			var harnessDefaults *harness.Harness
+			if rigCfg, err := rig.LoadRigConfig(rigPath); err == nil && rigCfg.HarnessDefaults != nil {
+				harnessDefaults = &harness.Harness{
+					Tier0: rigCfg.HarnessDefaults.Tier0,
+					Tier1: rigCfg.HarnessDefaults.Tier1,
+				}
+			}
+			h, err := harness.LoadHarness(cwd, issueID, harnessDefaults)
+			if err != nil {
+				return fmt.Errorf("loading verification harness: %w", err)
+			}
+			tiers := [][]string{}
+			if len(h.Tier0) > 0 {
+				tiers = append(tiers, h.Tier0)
+			}
+			if len(h.Tier1) > 0 {
+				tiers = append(tiers, h.Tier1)
+			}
+			if len(tiers) > 0 {
+				fmt.Printf("%s Running verification harness...\n", style.Bold.Render("→"))
+				hResult := harness.RunTiered(context.Background(), cwd, tiers)
+				if !hResult.Success {
+					failed := hResult.Results[hResult.FailedAt]
+					msg := fmt.Sprintf("verification harness failed: %s (exit %d)", failed.Command, failed.ExitCode)
+					if failed.Stdout != "" {
+						msg += "\n--- stdout ---\n" + failed.Stdout
+					}
+					if failed.Stderr != "" {
+						msg += "\n--- stderr ---\n" + failed.Stderr
+					}
+					return fmt.Errorf("%s\nFix the failure and retry gt done", msg)
+				}
+				fmt.Printf("%s Verification harness passed (%s)\n", style.Bold.Render("✓"), hResult.Summary())
 			}
 		}
 

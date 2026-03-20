@@ -16,6 +16,7 @@ import (
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/events"
 	"github.com/steveyegge/gastown/internal/git"
+	"github.com/steveyegge/gastown/internal/harness"
 	"github.com/steveyegge/gastown/internal/mail"
 	"github.com/steveyegge/gastown/internal/polecat"
 	"github.com/steveyegge/gastown/internal/rig"
@@ -375,6 +376,30 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 		}
 		if workStatus.HasUncommittedChanges && !workStatus.CleanExcludingRuntime() {
 			return fmt.Errorf("cannot complete: uncommitted changes would be lost\nCommit your changes first, or use --status DEFERRED to exit without completing\nUncommitted: %s", workStatus.String())
+		}
+
+		// Run verification harness before submitting to merge queue.
+		// Loads layered config: bead-specific > repo-level > rig defaults.
+		// If any tier fails, refuse to submit — bead stays hooked.
+		rigPath := filepath.Join(townRoot, rigName)
+		var harnessDefaults *harness.Harness
+		if rigCfg, err := rig.LoadRigConfig(rigPath); err == nil && rigCfg.HarnessDefaults != nil {
+			harnessDefaults = &harness.Harness{
+				Tier0: rigCfg.HarnessDefaults.Tier0,
+				Tier1: rigCfg.HarnessDefaults.Tier1,
+			}
+		}
+		h, err := harness.LoadHarness(cwd, issueID, harnessDefaults)
+		if err != nil {
+			return fmt.Errorf("loading verification harness: %w", err)
+		}
+		if tiers := h.Tiers(); len(tiers) > 0 {
+			fmt.Printf("%s Running verification harness...\n", style.Bold.Render("→"))
+			hResult := harness.RunTiered(context.Background(), cwd, tiers)
+			if !hResult.Success {
+				return fmt.Errorf("verification harness failed: %s\nFix the issue and try gt done again", hResult.Summary())
+			}
+			fmt.Printf("%s Verification harness passed (%s)\n", style.Bold.Render("✓"), hResult.Summary())
 		}
 
 		// Check if branch has commits ahead of origin/default

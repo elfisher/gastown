@@ -13,6 +13,18 @@ type Harness struct {
 	Tier1 []string `yaml:"tier1"`
 }
 
+// Tiers returns the tiers as a [][]string suitable for RunTiered.
+func (h *Harness) Tiers() [][]string {
+	var tiers [][]string
+	if len(h.Tier0) > 0 {
+		tiers = append(tiers, h.Tier0)
+	}
+	if len(h.Tier1) > 0 {
+		tiers = append(tiers, h.Tier1)
+	}
+	return tiers
+}
+
 // LoadHarness reads layered harness config and returns merged command lists.
 // Layer priority (highest first):
 //  1. Bead-specific: <rigPath>/.gastown/harness/<beadID>.yaml

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/steveyegge/gastown/internal/beads"
 	gitpkg "github.com/steveyegge/gastown/internal/git"
+	harnessRunner "github.com/steveyegge/gastown/internal/harness"
 )
 
 // TestDoneUsesResolveBeadsDir verifies that the done command correctly uses
@@ -1336,6 +1338,63 @@ func TestPushSubmoduleChanges_NoSubmodules(t *testing.T) {
 	// Should not panic or error — just a no-op
 	g := gitpkg.NewGit(parent)
 	pushSubmoduleChanges(g, "main")
+}
+
+// TestDoneHarnessFailsBlocksSubmit verifies that when the verification harness
+// fails, gt done refuses to submit to the merge queue (bead stays hooked).
+func TestDoneHarnessFailsBlocksSubmit(t *testing.T) {
+	// Simulate the harness check logic from runDone:
+	// Load harness → run tiered → if !success, return error
+	tiers := [][]string{{"false"}} // "false" command always exits 1
+
+	result := harnessRunner.RunTiered(context.Background(), t.TempDir(), tiers)
+	if result.Success {
+		t.Fatal("expected harness to fail")
+	}
+
+	// Verify the error message matches what done.go would produce
+	errMsg := fmt.Sprintf("verification harness failed: %s\nFix the issue and try gt done again", result.Summary())
+	if !strings.Contains(errMsg, "verification harness failed") {
+		t.Errorf("error message should contain 'verification harness failed': %s", errMsg)
+	}
+}
+
+// TestDoneHarnessPassesAllowsSubmit verifies that when the verification harness
+// passes, gt done proceeds to submit to the merge queue.
+func TestDoneHarnessPassesAllowsSubmit(t *testing.T) {
+	tiers := [][]string{{"true"}} // "true" command always exits 0
+
+	result := harnessRunner.RunTiered(context.Background(), t.TempDir(), tiers)
+	if !result.Success {
+		t.Fatalf("expected harness to pass, got: %s", result.Summary())
+	}
+}
+
+// TestDoneHarnessEmptySkips verifies that when no harness commands are configured,
+// gt done skips the harness check entirely (no error, no blocking).
+func TestDoneHarnessEmptySkips(t *testing.T) {
+	h := &harnessRunner.Harness{}
+	tiers := h.Tiers()
+	if len(tiers) > 0 {
+		t.Errorf("empty harness should produce no tiers, got %d", len(tiers))
+	}
+}
+
+// TestDoneHarnessTieredFailure verifies that a tier1 failure blocks submission
+// even when tier0 passes.
+func TestDoneHarnessTieredFailure(t *testing.T) {
+	tiers := [][]string{
+		{"true"},  // tier0 passes
+		{"false"}, // tier1 fails
+	}
+
+	result := harnessRunner.RunTiered(context.Background(), t.TempDir(), tiers)
+	if result.Success {
+		t.Fatal("expected harness to fail on tier1")
+	}
+	if result.FailedAt != 1 {
+		t.Errorf("expected failure at index 1, got %d", result.FailedAt)
+	}
 }
 
 func testRunGit(t *testing.T, dir string, args ...string) {

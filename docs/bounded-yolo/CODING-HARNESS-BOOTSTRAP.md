@@ -10,7 +10,11 @@ Meanwhile, the codebase already has most of this information — in CI configs, 
 
 `gt rig bootstrap` analyzes a codebase and automatically configures GT so agents can work on it effectively from day one. It discovers what the repo already has, extracts actionable information, and wires it into GT's existing context injection and verification systems.
 
-## User Story
+Works on new rigs and existing rigs alike. On existing rigs it fills gaps, warns on conflicts, and never overwrites manual customizations.
+
+## User Stories
+
+### New rig
 
 I add a new rig: `gt rig add myapp --url https://github.com/myorg/myapp.git`
 
@@ -36,6 +40,43 @@ Agents will now:
 ```
 
 From this point, polecats slung against this rig automatically get the right context and verification gates. No manual configuration needed.
+
+### Existing rig
+
+I already have the gastown rig running with some manual config. I run: `gt rig bootstrap gastown`
+
+It scans the repo, compares with what's already configured:
+
+```
+✓ Discovered: go.mod (Go project)
+✓ Discovered: Makefile with targets: build, test, lint
+○ config.json build_command already set: go build ./... (matches discovery)
+○ config.json test_command already set: go test ./... (matches discovery)
+⚠ CI has lint command: golangci-lint run — but config.json lint_command is empty. Add? [y/n]
+✓ Found: .gastown/harness.yaml (preserving existing verify tier)
+✓ Updated: harness.yaml tier1 += golangci-lint run
+○ AGENTS.md exists (preserving manual content, appending discovered docs section)
+✓ Found: docs/bounded-yolo/ (6 docs) — added to AGENTS.md references
+```
+
+### Re-run behavior
+
+Bootstrap is safe to run repeatedly. On re-run it:
+
+- **Fills gaps** — if config.json has `build_command` but no `lint_command`, and bootstrap discovers a lint command in CI, it adds the missing one
+- **Warns on conflicts** — if config.json says `npm test` but CI says `jest --coverage`, it asks: "CI uses `jest --coverage` but config has `npm test` — update? [y/n]"
+- **Never overwrites manual additions** — if harness.yaml has a `verify` tier with custom assertions, bootstrap leaves it alone (it only manages tier0/tier1 from discovery)
+- **Never overwrites manual AGENTS.md content** — appends a `## Discovered` section, preserves everything above it
+- **Refreshes stale detection** — if the repo added a new CI workflow since last bootstrap, it picks it up
+
+### Flags
+
+| Flag | Behavior |
+|------|----------|
+| (none) | Interactive — prompts on conflicts, fills gaps |
+| `--refresh` | Force full re-scan, re-extract everything (still prompts on conflicts) |
+| `--dry-run` | Show what would change without writing anything |
+| `--yes` | Non-interactive — accept all discovered values, no prompts |
 
 ## Success Criteria
 

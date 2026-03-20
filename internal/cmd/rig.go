@@ -343,6 +343,7 @@ func init() {
 	rootCmd.AddCommand(rigCmd)
 	rigCmd.AddCommand(rigAddCmd)
 	rigCmd.AddCommand(rigBootCmd)
+	rigCmd.AddCommand(rigBootstrapCmd)
 	rigCmd.AddCommand(rigListCmd)
 	rigCmd.AddCommand(rigRebootCmd)
 	rigCmd.AddCommand(rigRemoveCmd)
@@ -352,6 +353,10 @@ func init() {
 	rigCmd.AddCommand(rigStartCmd)
 	rigCmd.AddCommand(rigStatusCmd)
 	rigCmd.AddCommand(rigStopCmd)
+
+	rigBootstrapCmd.Flags().BoolVar(&bootstrapRefresh, "refresh", false, "Force full re-scan")
+	rigBootstrapCmd.Flags().BoolVar(&bootstrapDryRun, "dry-run", false, "Show what would change without writing")
+	rigBootstrapCmd.Flags().BoolVar(&bootstrapYes, "yes", false, "Non-interactive: accept all discovered values")
 
 	rigListCmd.Flags().BoolVar(&rigListJSON, "json", false, "Output as JSON")
 
